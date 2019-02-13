@@ -19,8 +19,8 @@ def rmdir(dir_path):
 def working_dir(path):
     """temporary switch of working directory"""
 
+    current_dir = os.getcwd()
     if path is not None:
-        current_dir = os.getcwd()
         os.chdir(path)
 
     try:
@@ -117,7 +117,9 @@ def handle_subprocess_error(exc):
         raise ExeFailedException(message) from exc
 
 
-def exec_cmdline(command, args_list, check_ret_code=True, log_save_path=None, env_vars=None, pre_cmd=None, post_cmd=None):
+def exec_cmdline(command, args_list, check_ret_code=True,
+                 log_save_path=None, env_vars=None,
+                 pre_cmd=None, post_cmd=None):
     """
     Runs command and returns the captured stdout log
     :param command:
@@ -146,7 +148,7 @@ def exec_cmdline(command, args_list, check_ret_code=True, log_save_path=None, en
     # chain commands
     cmd_line = ''
     for task in cmd_line_tasks[:-1]:
-        cmd_line += '{ ' + env_vars_line + task  + ' & } ; '
+        cmd_line += '{ ' + env_vars_line + task + ' & } ; '
 
     cmd_line += env_vars_line + cmd_line_tasks[-1]
 
@@ -156,7 +158,6 @@ def exec_cmdline(command, args_list, check_ret_code=True, log_save_path=None, en
 
     if post_cmd:
         cmd_line += ' && ' + ' && '.join(post_cmd)
-
 
     print()
     print('working dir/command line:')
@@ -186,5 +187,3 @@ def exec_cmdline(command, args_list, check_ret_code=True, log_save_path=None, en
     except subprocess.CalledProcessError as exc:
         handle_subprocess_error(exc)
         raise
-
-

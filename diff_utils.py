@@ -4,9 +4,9 @@ import os.path
 
 import sys
 import difflib
-#import subprocess
-#import numpy as np
-#import pandas as pd
+# import subprocess
+# import numpy as np
+# import pandas as pd
 
 
 globalIgnoreLines = {}
@@ -87,13 +87,12 @@ def diff_dirs(ref_dir, test_dir, print_diff=True, ignore_lines=None, comparators
         dir_comp_res.report()
         print()
 
-
     if not ignore_missing:
         # check number of files is the same
         assert len(dir_comp_res.right_only) == 0, f'Files only in {dir_comp_res.right}: {dir_comp_res.right_only}'
         assert len(dir_comp_res.left_only) == 0, f'Files only in {dir_comp_res.left}: {dir_comp_res.left_only}'
 
-        #check names of files are the same
+        # check names of files are the same
         assert set(dir_comp_res.right_list).issuperset(dir_comp_res.left_list), \
             f'Different file names found {set(dir_comp_res.right_list).difference(dir_comp_res.left_list)}'
 
@@ -125,7 +124,6 @@ def diff_dirs(ref_dir, test_dir, print_diff=True, ignore_lines=None, comparators
                         yield diff_file
 
                     break
-
 
         if not found_comparator:
             if default_file_diff(file_name1, file_name2, print_diff, ignore_lines):

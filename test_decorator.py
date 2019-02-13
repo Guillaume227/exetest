@@ -1,7 +1,7 @@
 import os
 import os.path
 from . import misc_utils
-from .misc_utils  import working_dir, rmdir
+from .misc_utils import working_dir, rmdir
 from .diff_utils import default_file_diff
 from functools import wraps
 import shutil
@@ -21,13 +21,14 @@ def expect_exception(predicate=None):
                 message = exc.args[0]
                 if callable(predicate) and not predicate(message):
                     raise
-                elif isinstance(predicate, str) and not predicate in message:
+                elif isinstance(predicate, str) and predicate not in message:
                     raise
                 else:
-                    return # found the expected exception
+                    return  # found the expected exception
+
             message = predicate.__doc__ if callable(predicate) else predicate
             raise Exception('Expected exception was not thrown. '
-                            f'Epxxected: "{message}"; return value was "{ret}"')
+                            f'Expected: "{message}"; return value was "{ret}"')
         return wrapped_func
     return decorator
 
@@ -41,12 +42,12 @@ class ExeTestDecorator:
     REBASE_ENV_VAR = 'DO_TEST_REBASE'
 
     def __init__(self, exe_path,
-                 test_root,
                  ref_dir,
                  out_dir,
+                 test_root,  # =os.path.dirname(__file__),
                  exe_args=None,
                  run_from_out_dir=True,
-                 test_name_as_dir=False,
+                 test_name_as_dir=True,
                  comparators=None,
                  exception_handler=None,
                  env_vars=None,
@@ -168,7 +169,7 @@ class ExeTestDecorator:
                 :return:
                 """
 
-                if func.__foc__:
+                if func.__doc__:
                     for line in func.__foc__.splitlines():
                         if line.strip():
                             return line.strip()
@@ -190,8 +191,7 @@ class ExeTestDecorator:
 
         :return:
         """
-        return os.getenv("DO_TEST_REBASE", False)
-
+        return os.getenv(ExeTestDecorator.REBASE_ENV_VAR, False)
 
     def run_test(self, exe_args, out_diff, pre_cmd, env_vars, post_cmd, test_name):
 
@@ -200,7 +200,7 @@ class ExeTestDecorator:
                 raise Exception("cannot rebase unless confirmation prompt is displayed in terminal"
                                 "make sure you are using --nocapture option")
 
-        files_to_compare = self.get_files_to_commpare(out_diff, test_name)
+        files_to_compare = self.get_files_to_compare(out_diff, test_name)
 
         if out_diff and not files_to_compare:
             raise Exception(f"No reference output files found in {out_diff}")
@@ -212,7 +212,7 @@ class ExeTestDecorator:
                 pass
 
             if os.path.isdir(ref_file):
-                file_diir = new_file
+                file_dir = new_file
             else:
                 file_dir = os.path.dirname(new_file)
 
@@ -228,8 +228,11 @@ class ExeTestDecorator:
             with working_dir(run_from_dir):
 
                 try:
-                    misc_utils.exeCmd(self.exe_path, exe_args, pre_cmd=pre_cmd, env_vars=env_vars, post_cmd=post_cmd,
-                                      log_save_path=self.log_output_path)
+                    misc_utils.exec_cmdline(self.exe_path, exe_args,
+                                            pre_cmd=pre_cmd,
+                                            env_vars=env_vars,
+                                            post_cmd=post_cmd,
+                                            log_save_path=self.log_output_path)
                 except Exception as exc:
                     if self.exception_handler:
                         self.exception_handler(exc)
@@ -250,39 +253,39 @@ class ExeTestDecorator:
                 for file_dir in created_dirs:
                     rmdir(file_dir)
 
-        def run_compare(self, files_to_compare):
+    def run_compare(self, files_to_compare):
 
-            for ref_file, _new_file in files_to_compare:
-                if not os.path.exists(ref_file):
-                    raise Exception(f"Missing reference file: {ref_file}")
+        for ref_file, _new_file in files_to_compare:
+            if not os.path.exists(ref_file):
+                raise Exception(f"Missing reference file: {ref_file}")
 
-            for ref_file, new_file in files_to_compare:
-                self.diff_files(ref_file, new_file)
+        for ref_file, new_file in files_to_compare:
+            self.diff_files(ref_file, new_file)
 
-        def run_rebase_compare(self, files_to_compare):
+    def run_rebase_compare(self, files_to_compare):
 
-            failed_rebase_msg = ''
+        failed_rebase_msg = ''
 
-            for ref_file, new_file in files_to_compare:
-                if not os.path.exists(ref_file):
-                    os.makedirs(os.path.dirname(ref_file), exist_ok=True)
-                elif self.diff_files(ref_file, new_file, throw=False):
-                    continue
+        for ref_file, new_file in files_to_compare:
+            if not os.path.exists(ref_file):
+                os.makedirs(os.path.dirname(ref_file), exist_ok=True)
+            elif self.diff_files(ref_file, new_file, throw=False):
+                continue
 
-                print(f"rebasing test - about to update gold copy: {new_file} -> {ref_file}")
+            print(f"rebasing test - about to update gold copy: {new_file} -> {ref_file}")
 
-                if 'Y' == input("Are you sure? (Y/n) ").strip():
-                    try:
-                        shutil.copy(new_file, ref_file)
-                        os.remove(new_file)
-                    except PermissionError as err:
-                        failed_rebase_msg += f'\ncp {new_file} {ref_file}'
-                        print('rebase failed', str(err))
-                else:
-                    print("aborting rebase for", ref_file)
+            if 'Y' == input("Are you sure? (Y/n) ").strip():
+                try:
+                    shutil.copy(new_file, ref_file)
+                    os.remove(new_file)
+                except PermissionError as err:
+                    failed_rebase_msg += f'\ncp {new_file} {ref_file}'
+                    print('rebase failed', str(err))
+            else:
+                print("aborting rebase for", ref_file)
 
-            if failed_rebase_msg:
-                raise Exception(f'failed rebasing tests: {failed_rebase_msg}')
+        if failed_rebase_msg:
+            raise Exception(f'failed rebasing tests: {failed_rebase_msg}')
 
     def diff_files(self, ref_file, new_file, throw=True):
 
@@ -302,7 +305,6 @@ class ExeTestDecorator:
             raise Exception(error_msg)
         else:
             return False
-
 
     def infer_new_from_ref(self, ref_file_path, test_subdir):
         if ref_file_path.startswith(self.REF_OUTPUT_DIR):
@@ -360,7 +362,6 @@ class ExeTestDecorator:
 
                     ref_path = os.path.join(self.REF_OUTPUT_DIR, test_subdir, ref_path)
 
-
                 if self.test_name_as_dir:
                     test_subdir = self.get_output_dir(test_name)
                     if not new_path.startswith(test_subdir):
@@ -370,12 +371,10 @@ class ExeTestDecorator:
 
         return files_to_compare
 
-
     def clear_tmp_dir(self, recreate=False):
         self.clear_dir(self.TMP_OUTPUT_DIR, recreate=recreate)
 
     def clear_dir(self, dir_path, recreate=False):
-
         with working_dir(self.test_root):
             output_dir = dir_path
             if recreate:
