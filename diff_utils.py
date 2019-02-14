@@ -1,7 +1,7 @@
 import filecmp
 import os
 import os.path
-
+import platform
 import sys
 import difflib
 # import subprocess
@@ -12,7 +12,7 @@ import difflib
 globalIgnoreLines = {}
 
 
-def default_file_diff(file_path1, file_path2, print_diff=True, ignore_lines=tuple()):
+def default_file_diff(file_path1, file_path2, print_diff=True, ignore_lines=tuple(), max_diff_in_log=25):
     """ compare two files line by line:
         @:return: False if a difference is found
     """
@@ -21,32 +21,35 @@ def default_file_diff(file_path1, file_path2, print_diff=True, ignore_lines=tupl
     file2 = open(file_path2, 'r')
 
     try:
-        diff = difflib.unified_diff(file1.readlines(), file2.readlines(), file_path1, file_path2, n=0)
+        diff = difflib.unified_diff(file1.readlines(), file2.readlines(),
+                                    fromfile=file_path1, tofile=file_path2,
+                                    n=0  # no context lines
+                                    )
 
         num_diffs = 0
         ignored_diffs = 0
         if diff:
             print()
 
-        for diffline in diff:
+        for diff_line in diff:
             if print_diff:
-                print(diffline, end='', file=sys.stderr)
+                print(diff_line, end='', file=sys.stderr)
 
-            if any(diffline.startswith(tag) for tag in ['---', '+++', '@@ ']):
-                # ignore diff meta data
+            if any(diff_line.startswith(tag) for tag in ['---', '+++', '@@ ']):
+                # skip diff output meta data
                 continue
-
             else:
+
                 ignore = False
                 for file_name_ending in ignore_lines:
                     if file_path1.endswith(file_name_ending):
                         item = ignore_lines[file_name_ending]
                         # assume it's a list of patterns
-                        ignore = item(diffline) if callable(item) else any(line in diffline for line in item)
+                        ignore = item(diff_line) if callable(item) else any(line in diff_line for line in item)
 
                         if ignore:
                             ignored_diffs += 1
-                            if diffline.startswith('+'):
+                            if diff_line.startswith('+'):
                                 print('      Above diff is ignored', file=sys.stderr)
                                 break
 
@@ -54,11 +57,17 @@ def default_file_diff(file_path1, file_path2, print_diff=True, ignore_lines=tupl
                     continue
 
             num_diffs += 1
-            if num_diffs >= 25:
+            if num_diffs >= max_diff_in_log:
                 print(f'more than {num_diffs} diffs found - diff file manually for more details', file=sys.stderr)
                 break
 
-        return num_diffs == 0
+        if num_diffs == 0:
+            if ignored_diffs == 0 and platform.system() != 'Windows':
+                print('        Ignoring Diff on {0} coming from line endings unix vs windows'.format(file_path1))
+
+            return True
+
+        return False
 
     except UnicodeDecodeError:
         print("     skipping text diff on non-text file:", file_path1)
