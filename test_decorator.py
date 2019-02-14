@@ -188,10 +188,9 @@ class ExeTestDecorator:
     @staticmethod
     def do_test_rebase():
         """
-
-        :return:
+        :return: whether to run test in rebase mode
         """
-        return os.getenv(ExeTestDecorator.REBASE_ENV_VAR, False)
+        return os.getenv(ExeTestDecorator.REBASE_ENV_VAR) is not None
 
     def run_test(self, exe_args, out_diff, pre_cmd, env_vars, post_cmd, test_name):
 
@@ -200,12 +199,12 @@ class ExeTestDecorator:
                 raise Exception("cannot rebase unless confirmation prompt is displayed in terminal"
                                 "make sure you are using --nocapture option")
 
-        files_to_compare = self.get_files_to_compare(out_diff, test_name)
-
-        if out_diff and not files_to_compare:
-            raise Exception(f"No reference output files found in {out_diff}")
-
         with working_dir(self.test_root):
+
+            files_to_compare = self.get_files_to_compare(out_diff, test_name)
+
+            if out_diff and not files_to_compare:
+                raise Exception(f"No reference output files found in {out_diff}")
 
             created_dirs = []
             for ref_file, new_file, in files_to_compare:
@@ -347,7 +346,10 @@ class ExeTestDecorator:
                 new_path = os.path.normpath(new_path)
 
                 for dirpath, dirnames, filenames in os.walk(ref_path):
-                    tmp_path = dirpath.replace(ref_path, new_path, 1)
+                    if self.run_from_out_dir:
+                        tmp_path = dirpath.replace(os.path.join(ref_path, test_name), new_path, 1)
+                    else:
+                        tmp_path = dirpath.replace(ref_path, new_path, 1)
 
                     for filename in filenames:
                         files_to_compare.append((os.path.join(dirpath, filename), os.path.join(tmp_path, filename)))
