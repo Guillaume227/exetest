@@ -102,7 +102,7 @@ def format_log_for_exception(exc, max_num_lines=20):
 
     if exec_log:
         message = exec_log.decode('latin-1', errors='ignore')
-        last_few_lines = '\n'.join(message.rsplit('\n', max_num_lines)[-(max_num_lines-1):])
+        last_few_lines = os.linesep.join(message.rsplit(os.linesep, max_num_lines)[-(max_num_lines-1):])
         msg_len = len(message)
 
         if msg_len > len(last_few_lines):
@@ -175,8 +175,8 @@ def exec_cmdline(command, args_list, check_ret_code=True,
 
         log_out = result_info.stdout
         if log_save_path is not None:
-            log_out = log_out.decode('latin-1')
-            with open(log_save_path, 'w') as f:
+            # log_out = log_out.decode('latin-1')
+            with open(log_save_path, 'wb') as f:
                 f.write(log_out)
 
         if check_ret_code:
