@@ -256,7 +256,7 @@ class ExeTestDecorator:
 
         for ref_file, _new_file in files_to_compare:
             if not os.path.exists(ref_file):
-                raise Exception(f"Missing reference file: {ref_file}")
+                raise Exception(f"Missing reference file: {ref_file} - you can rebase by using {self.REBASE_ENV_VAR}= environment variable")
 
         for ref_file, new_file in files_to_compare:
             self.diff_files(ref_file, new_file)
@@ -275,8 +275,8 @@ class ExeTestDecorator:
 
             if 'Y' == input("Are you sure? (Y/n) ").strip():
                 try:
-                    shutil.copy(new_file, ref_file)
-                    os.remove(new_file)
+                    shutil.copytree(new_file, ref_file)
+                    shutil.rmtree(new_file)
                 except PermissionError as err:
                     failed_rebase_msg += f'\ncp {new_file} {ref_file}'
                     print('rebase failed', str(err))
@@ -307,14 +307,8 @@ class ExeTestDecorator:
 
     def infer_new_from_ref(self, ref_file_path, test_subdir):
         if ref_file_path.startswith(self.REF_OUTPUT_DIR):
-            if self.run_from_out_dir:
-                if os.path.isdir(ref_file_path):
-                    return os.path.join(self.TMP_OUTPUT_DIR, test_subdir)
-                else:
-                    return os.path.join(self.TMP_OUTPUT_DIR, test_subdir, os.path.basename(ref_file_path))
-            else:
-                relative_dir = ref_file_path.split(self.REF_OUTPUT_DIR)[-1]
-                return os.path.join(self.TMP_OUTPUT_DIR, relative_dir[1:])
+            relative_dir = ref_file_path.split(self.REF_OUTPUT_DIR)[-1]
+            return os.path.join(self.TMP_OUTPUT_DIR, relative_dir[1:])
         elif not os.path.isabs(ref_file_path):
             return os.path.join(self.TMP_OUTPUT_DIR, test_subdir, ref_file_path)
         elif os.path.isdir(ref_file_path):
@@ -324,9 +318,20 @@ class ExeTestDecorator:
 
     def get_files_to_compare(self, out_diff, test_name):
         if out_diff is None:
-            out_diff = self.REF_OUTPUT_DIR
+            if self.test_name_as_dir:
+                out_diff = os.path.join(self.REF_OUTPUT_DIR, test_name)
+            else:
+                out_diff = self.REF_OUTPUT_DIR
+
+            if not os.path.exists(out_diff):
+                if self.test_name_as_dir:
+                    return (out_diff, os.path.join(self.TMP_OUTPUT_DIR, test_name)),
+                else:
+                    return (out_diff, self.TMP_OUTPUT_DIR),
+
         elif not out_diff:
             return []
+
         if isinstance(out_diff, str):
             # single reference file
             out_diff = [out_diff]
@@ -335,6 +340,7 @@ class ExeTestDecorator:
         use_full_ref_path = os.path.isabs(self.REF_OUTPUT_DIR)
 
         for ref_path in out_diff:
+
             if isinstance(out_diff, dict):
                 new_path = out_diff[ref_path]
             else:
@@ -347,7 +353,7 @@ class ExeTestDecorator:
 
                 for dirpath, dirnames, filenames in os.walk(ref_path):
                     if self.run_from_out_dir:
-                        tmp_path = dirpath.replace(os.path.join(ref_path, test_name), new_path, 1)
+                        tmp_path = new_path
                     else:
                         tmp_path = dirpath.replace(ref_path, new_path, 1)
 
@@ -364,10 +370,6 @@ class ExeTestDecorator:
 
                     ref_path = os.path.join(self.REF_OUTPUT_DIR, test_subdir, ref_path)
 
-                if self.test_name_as_dir:
-                    test_subdir = self.get_output_dir(test_name)
-                    if not new_path.startswith(test_subdir):
-                        new_path = os.path.join(test_subdir, new_path)
 
                 files_to_compare.append((ref_path, new_path))
 
