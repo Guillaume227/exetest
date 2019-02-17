@@ -275,8 +275,12 @@ class ExeTestDecorator:
 
             if 'Y' == input("Are you sure? (Y/n) ").strip():
                 try:
-                    shutil.copytree(new_file, ref_file)
-                    shutil.rmtree(new_file)
+                    if os.path.isdir(new_file):
+                        shutil.copytree(new_file, ref_file)
+                        shutil.rmtree(new_file)
+                    else:
+                        shutil.copy(new_file, ref_file)
+                        os.remove(new_file)
                 except PermissionError as err:
                     failed_rebase_msg += f'\ncp {new_file} {ref_file}'
                     print('rebase failed', str(err))
