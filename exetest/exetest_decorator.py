@@ -9,39 +9,17 @@ import sys
 import unittest
 
 
-def expect_exception(predicate=None):
-
-    def decorator(test_func):
-
-        @wraps(test_func)
-        def wrapped_func(_self, *args, **kwargs):
-            try:
-                ret = test_func(_self, *args, **kwargs)
-            except Exception as exc:
-                message = exc.args[0]
-                if callable(predicate) and not predicate(message):
-                    raise
-                elif isinstance(predicate, str) and predicate not in message:
-                    raise
-                else:
-                    return  # found the expected exception
-
-            message = predicate.__doc__ if callable(predicate) else predicate
-            raise Exception('Expected exception was not thrown. '
-                            f'Expected: "{message}"; return value was "{ret}"')
-        return wrapped_func
-    return decorator
-
-
-class ExeTestDecorator:
+class ExeTestCase:
     """
-
+    A test case decorator for testing an executable outputs
+    by comparing new output to reference output
     """
 
     USE_EXE_ENV_VAR = 'USE_TEST_EXE'
     REBASE_ENV_VAR = 'DO_TEST_REBASE'
 
-    def __init__(self, exe_path,
+    def __init__(self,
+                 exe,
                  ref_dir,
                  out_dir,
                  test_root,  # =os.path.dirname(__file__),
@@ -56,17 +34,17 @@ class ExeTestDecorator:
                  log_output_path=None):
         """
 
-        :param exe_path:
-        :param test_root:
-        :param ref_dir:
+        :param exe:
+        :param ref_dir: absolute path or relative to directory where test case is defined
         :param out_dir:
-        :param exe_args:
-        :param run_from_out_dir:
-        :param test_name_as_dir:
+        :param test_root:
+        :param exe_args: test executable arguments in string format - as would be passed to command line
+        :param run_from_out_dir: whether the executable working directory should be the output directory
+        :param test_name_as_dir: whether the test name should be used to infer the ref and output directories
         :param comparators:
-        :param exception_handler:
-        :param env_vars:
-        :param pre_cmd:
+        :param exception_handler: what to do in case of exception
+        :param env_vars: environment variables to populate for the test run
+        :param pre_cmd: a command to run before the executable is run
         :param exe_path_ref:
         :param log_output_path:
         """
@@ -79,7 +57,7 @@ class ExeTestDecorator:
             elif val:
                 return val
             else:
-                return exe_path
+                return exe
 
         rebase_exe = os.environ.get(self.REBASE_ENV_VAR)
         use_test_exe = os.environ.get(self.USE_EXE_ENV_VAR)
@@ -92,7 +70,7 @@ class ExeTestDecorator:
         elif use_test_exe is not None:
             self.exe_path = get_test_exe(use_test_exe)
         else:
-            self.exe_path = exe_path
+            self.exe_path = exe
 
         self.test_root = test_root
         self.REF_OUTPUT_DIR = ref_dir
@@ -119,7 +97,8 @@ class ExeTestDecorator:
             output_dir = os.path.join(output_dir, test_name)
         return output_dir
 
-    def __call__(self, exe_args=None, out_diff=None, pre_cmd=None, env_vars=None, post_cmd=None, owners=None):
+    def __call__(self, exe_args=None, out_diff=None, pre_cmd=None,
+                    env_vars=None, post_cmd=None, owners=None):
 
         all_env_vars = dict(self.common_env_vars)
         if env_vars:
@@ -140,11 +119,9 @@ class ExeTestDecorator:
 
         def func_wrapper(test_func):
             """
-
             :param test_func:
             :return:
             """
-
             test_name = test_func.__name__.split("_", 1)[-1]
 
             @wraps(test_func)
@@ -170,7 +147,7 @@ class ExeTestDecorator:
                 """
 
                 if func.__doc__:
-                    for line in func.__foc__.splitlines():
+                    for line in func.__doc__.splitlines():
                         if line.strip():
                             return line.strip()
                     return ""
@@ -183,14 +160,15 @@ class ExeTestDecorator:
                 f.description = test_name.ljust(10)
 
             return f
+
         return func_wrapper
 
-    @staticmethod
-    def do_test_rebase():
+    @classmethod
+    def do_test_rebase(cls):
         """
         :return: whether to run test in rebase mode
         """
-        return os.getenv(ExeTestDecorator.REBASE_ENV_VAR) is not None
+        return os.getenv(cls.REBASE_ENV_VAR) is not None
 
     def run_test(self, exe_args, out_diff, pre_cmd, env_vars, post_cmd, test_name):
 
@@ -208,16 +186,15 @@ class ExeTestDecorator:
 
             created_dirs = []
             for ref_file, new_file, in files_to_compare:
-                pass
 
-            if os.path.isdir(ref_file):
-                file_dir = new_file
-            else:
-                file_dir = os.path.dirname(new_file)
+                if os.path.isdir(ref_file):
+                    file_dir = new_file
+                else:
+                    file_dir = os.path.dirname(new_file)
 
-            if file_dir and not os.path.exists(file_dir):
-                os.makedirs(file_dir, exist_ok=True)
-                created_dirs.append(file_dir)
+                if file_dir and not os.path.exists(file_dir):
+                    os.makedirs(file_dir, exist_ok=True)
+                    created_dirs.append(file_dir)
 
             tmp_output_dir = self.get_output_dir(test_name)
             self.clear_dir(tmp_output_dir, recreate=True)
@@ -373,7 +350,6 @@ class ExeTestDecorator:
                         test_subdir = ''
 
                     ref_path = os.path.join(self.REF_OUTPUT_DIR, test_subdir, ref_path)
-
 
                 files_to_compare.append((ref_path, new_path))
 
