@@ -166,7 +166,8 @@ def exec_cmdline(command, args_list, check_ret_code=True,
     print()
 
     if not os.path.exists(command):
-        raise Exception(f'{command} not found. Is it in your path? Did you compile?')
+        raise Exception(f'{command} '
+                        f'not found in {os.getcwd()}. Is it in your path? Did you compile?')
 
     exe_name = os.path.basename(command.split()[0])
     try:
