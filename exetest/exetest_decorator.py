@@ -17,6 +17,7 @@ class ExeTestCase:
 
     USE_EXE_ENV_VAR = 'USE_TEST_EXE'
     REBASE_ENV_VAR = 'DO_TEST_REBASE'
+    COMPARE_ONLY_ENV_VAR = 'COMPARE_ONLY'
 
     def __init__(self,
                  exe,
@@ -117,6 +118,8 @@ class ExeTestCase:
             else:
                 exe_args = ''
 
+        self._compare_only = os.environ.get(self.COMPARE_ONLY_ENV_VAR, False)
+
         def func_wrapper(test_func):
             """
             :param test_func:
@@ -196,24 +199,26 @@ class ExeTestCase:
                     os.makedirs(file_dir, exist_ok=True)
                     created_dirs.append(file_dir)
 
-            tmp_output_dir = self.get_output_dir(test_name)
-            self.clear_dir(tmp_output_dir, recreate=True)
+            if not self._compare_only:
 
-            run_from_dir = os.path.join(self.test_root, tmp_output_dir) if self.run_from_out_dir else self.test_root
+                tmp_output_dir = self.get_output_dir(test_name)
+                self.clear_dir(tmp_output_dir, recreate=True)
 
-            with working_dir(run_from_dir):
+                run_from_dir = os.path.join(self.test_root, tmp_output_dir) \
+                    if self.run_from_out_dir else self.test_root
 
-                try:
-                    misc_utils.exec_cmdline(self.exe_path, exe_args,
-                                            pre_cmd=pre_cmd,
-                                            env_vars=env_vars,
-                                            post_cmd=post_cmd,
-                                            log_save_path=self.log_output_path)
-                except Exception as exc:
-                    if self.exception_handler:
-                        self.exception_handler(exc)
-                    else:
-                        raise
+                with working_dir(run_from_dir):
+                    try:
+                        misc_utils.exec_cmdline(self.exe_path, exe_args,
+                                                pre_cmd=pre_cmd,
+                                                env_vars=env_vars,
+                                                post_cmd=post_cmd,
+                                                log_save_path=self.log_output_path)
+                    except Exception as exc:
+                        if self.exception_handler:
+                            self.exception_handler(exc)
+                        else:
+                            raise
 
             with working_dir(self.test_root):
 
