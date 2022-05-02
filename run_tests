@@ -1,0 +1,39 @@
+#!/usr/bin/python3
+
+import subprocess
+import argparse
+
+if __name__ == "__main__":
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("test_case_filter", nargs='?',
+                        help="test cases to run - leave empty for all tests",
+                        default="")
+    parser.add_argument("--rebase",
+                        help="whether to prompt for tests rebase in case of difference to reference output",
+                        action='store_true')
+    parser.add_argument("--verbose",
+                        help="verbose flag",
+                        action='store_true')
+    args = parser.parse_args()
+
+    command_str = ''
+    if args.rebase:
+        command_str = "env DO_TEST_REBASE= "
+
+    command_str += f'pytest tests --capture=no --log-cli-level=INFO'
+    if args.test_case_filter:
+        command_str += f'-k "{args.test_case_filter}"'
+
+    if args.rebase:
+        print(f'run the following command in shell directly:\n{command_str}')
+    else:
+        if args.verbose:
+            print('running:', command_str)
+
+        subprocess.Popen(command_str.split(),
+                         shell=False,
+                         bufsize=0,
+                         stdin=subprocess.PIPE,
+                         stdout=subprocess.PIPE,
+                         stderr=subprocess.PIPE)
