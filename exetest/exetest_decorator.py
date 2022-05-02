@@ -98,9 +98,18 @@ class ExeTestCase:
             output_dir = os.path.join(output_dir, test_name)
         return output_dir
 
-    def __call__(self, exe_args=None, out_diff=None, pre_cmd=None,
+    def __call__(self, exe_args=None, compare_spec=None, pre_cmd=None,
                     env_vars=None, post_cmd=None, owners=None):
+        """
 
+        :param exe_args:
+        :param compare_spec:
+        :param pre_cmd:
+        :param env_vars:
+        :param post_cmd:
+        :param owners:
+        :return:
+        """
         all_env_vars = dict(self.common_env_vars)
         if env_vars:
             all_env_vars.update(env_vars)
@@ -132,7 +141,7 @@ class ExeTestCase:
                 ret = test_func(*args, **kwargs)
                 try:
                     self.run_test(exe_args,
-                                  out_diff,
+                                  compare_spec,
                                   pre_cmd=pre_cmds,
                                   env_vars=all_env_vars,
                                   post_cmd=post_cmd,
@@ -173,7 +182,7 @@ class ExeTestCase:
         """
         return os.getenv(cls.REBASE_ENV_VAR) is not None
 
-    def run_test(self, exe_args, out_diff, pre_cmd, env_vars, post_cmd, test_name):
+    def run_test(self, exe_args, compare_spec, pre_cmd, env_vars, post_cmd, test_name):
 
         if self.do_test_rebase():
             if not sys.stdout.isatty():
@@ -182,10 +191,10 @@ class ExeTestCase:
 
         with working_dir(self.test_root):
 
-            files_to_compare = self.get_files_to_compare(out_diff, test_name)
+            files_to_compare = self.get_files_to_compare(compare_spec, test_name)
 
-            if out_diff and not files_to_compare:
-                raise Exception(f"No reference output files found in {out_diff}")
+            if compare_spec and not files_to_compare:
+                raise Exception(f"No reference output files for {compare_spec}")
 
             created_dirs = []
             for ref_file, new_file, in files_to_compare:
@@ -302,33 +311,38 @@ class ExeTestCase:
         else:
             return os.path.join(self.TMP_OUTPUT_DIR, test_subdir, os.path.basename(ref_file_path))
 
-    def get_files_to_compare(self, out_diff, test_name):
-        if out_diff is None:
+    def get_files_to_compare(self, compare_spec, test_name):
+        """
+        :param compare_spec: a specification of which output files to compare
+        :param test_name: name of the test
+        :return: a list of pairs of filepaths to compare: [(ref_file_path, new_file_path), ...]
+        """
+        if compare_spec is None:
             if self.test_name_as_dir:
-                out_diff = os.path.join(self.REF_OUTPUT_DIR, test_name)
+                compare_spec = os.path.join(self.REF_OUTPUT_DIR, test_name)
             else:
-                out_diff = self.REF_OUTPUT_DIR
+                compare_spec = self.REF_OUTPUT_DIR
 
-            if not os.path.exists(out_diff):
+            if not os.path.exists(compare_spec):
                 if self.test_name_as_dir:
-                    return (out_diff, os.path.join(self.TMP_OUTPUT_DIR, test_name)),
+                    return (compare_spec, os.path.join(self.TMP_OUTPUT_DIR, test_name)),
                 else:
-                    return (out_diff, self.TMP_OUTPUT_DIR),
+                    return (compare_spec, self.TMP_OUTPUT_DIR),
 
-        elif not out_diff:
+        elif not compare_spec:
             return []
 
-        if isinstance(out_diff, str):
+        if isinstance(compare_spec, str):
             # single reference file
-            out_diff = [out_diff]
+            compare_spec = [compare_spec]
 
         files_to_compare = []
         use_full_ref_path = os.path.isabs(self.REF_OUTPUT_DIR)
 
-        for ref_path in out_diff:
+        for ref_path in compare_spec:
 
-            if isinstance(out_diff, dict):
-                new_path = out_diff[ref_path]
+            if isinstance(compare_spec, dict):
+                new_path = compare_spec[ref_path]
             else:
                 new_path = self.infer_new_from_ref(ref_path, test_name)
 
