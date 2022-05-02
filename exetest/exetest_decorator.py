@@ -337,7 +337,6 @@ class ExeTestCase:
             compare_spec = [compare_spec]
 
         files_to_compare = []
-        use_full_ref_path = os.path.isabs(self.REF_OUTPUT_DIR)
 
         for ref_path in compare_spec:
 
@@ -360,7 +359,8 @@ class ExeTestCase:
                     for filename in filenames:
                         files_to_compare.append((os.path.join(dirpath, filename), os.path.join(tmp_path, filename)))
             else:
-                if use_full_ref_path:
+
+                if not os.path.exists(ref_path):
                     if self.test_name_as_dir:
                         test_subdir = self.get_test_subdir(test_name)
                         if not os.path.exists(os.path.join(self.REF_OUTPUT_DIR, test_subdir)):
