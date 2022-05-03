@@ -338,7 +338,7 @@ class ExeTestCaseDecorator:
 
     def get_files_to_compare(self, compare_spec, test_name):
         """
-        :param compare_spec: a specification of which output files to compare
+        :param compare_spec: specifies output files to compare
         :param test_name: name of the test
         :return: a list of pairs of filepaths to compare: [(ref_file_path, new_file_path), ...]
         """
@@ -381,12 +381,13 @@ class ExeTestCaseDecorator:
 
                     for filename in filenames:
                         files_to_compare.append((os.path.join(dirpath, filename), os.path.join(tmp_path, filename)))
-            else:
 
+            else:
                 if not os.path.exists(ref_path):
                     ref_path = os.path.join(ref_dir, ref_path)
 
-                files_to_compare.append((ref_path, new_path))
+                #raise Exception(ref_path.replace(ref_dir, new_path))
+                files_to_compare.append((ref_path, ref_path.replace(ref_dir, new_path)))
 
         return files_to_compare
 

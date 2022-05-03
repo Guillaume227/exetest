@@ -18,6 +18,14 @@ def test_d():
     pass
 
 
+@myexe_testcase(compare_spec='myexe_output.txt')
+def test_dd():
+    """
+    Explicit output file specification
+    """
+    pass
+
+
 def validate_message(message):
     return 'files differ' in message
 
