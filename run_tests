@@ -10,6 +10,9 @@ if __name__ == "__main__":
     parser.add_argument("test_cases", nargs='*',
                         help="test cases to run - leave empty for running all tests",
                         default="")
+    parser.add_argument("-k",
+                        help="pytest -k expression for selecting tests",
+                        default="")
     parser.add_argument("--rebase",
                         help="whether to prompt for tests rebase in case of difference to reference output",
                         action='store_true')
@@ -32,6 +35,9 @@ if __name__ == "__main__":
     if args.verbose:
         command_str += ' --log-cli-level=INFO -v'
 
+    if args.k:
+        command_str += f' -k {args.k}'
+
     if args.test_cases:
         test_cases = []
         for test_case in args.test_cases:
@@ -43,7 +49,8 @@ if __name__ == "__main__":
             test_cases.append(test_case)
 
         command_str += ' ' + ' '.join(test_cases)
-    else:
+
+    elif not args.k:
         command_str += ' tests'
 
     if args.verbose:
