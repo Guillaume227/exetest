@@ -26,8 +26,11 @@ class ExeTestCaseDecorator:
                  ref_dir='ref_dir',
                  out_dir='out_dir',
                  exe_args=None,
+                 compare_spec=None,
                  run_from_out_dir=True,
                  test_name_as_dir=True,
+                 nested_ref_dir=True,
+                 nested_out_dir=False,
                  comparators=None,
                  exception_handler=None,
                  env_vars=None,
@@ -43,6 +46,8 @@ class ExeTestCaseDecorator:
         :param exe_args: test executable arguments in string format - as would be passed to command line
         :param run_from_out_dir: whether the executable working directory should be the output directory
         :param test_name_as_dir: whether the test name should be used to infer the ref and output directories
+        :param nested_ref_dir: whether ref_dir should be nested in the test_name directory (otherwise, test_name is nested under ref_dir)
+        :param nested_out_dir: whether out_dir should be nested in the test_name directory (otherwise, test_name is nested under out_dir)
         :param comparators:
         :param exception_handler: what to do in case of exception
         :param env_vars: environment variables to populate for the test run
@@ -89,23 +94,32 @@ class ExeTestCaseDecorator:
         self.log_output_path = log_output_path
 
         self.verbose = self.EXETEST_VERBOSE_ENV_VAR in os.environ
+        self._compare_spec = compare_spec
+        self._nested_ref_dir = nested_ref_dir
+        self._nested_out_dir = nested_out_dir
 
     @staticmethod
     def get_test_subdir(test_name):
         return test_name
 
     def get_output_dir(self, test_name):
-        output_dir = self.TMP_OUTPUT_DIR
+        return self.make_dir_path(self.TMP_OUTPUT_DIR, test_name, self._nested_out_dir)
 
-        if self.test_name_as_dir:
-            output_dir = os.path.join(output_dir, test_name)
-        return output_dir
+    def get_ref_dir(self, test_name):
+        return self.make_dir_path(self.REF_OUTPUT_DIR, test_name, self._nested_ref_dir)
 
-    def __call__(self, exe_args=None, compare_spec=None, pre_cmd=None,
-                    env_vars=None, post_cmd=None, owners=None):
+    def __call__(self,
+                 exe_args=None,
+                 extra_args=None,
+                 compare_spec=None,
+                 pre_cmd=None,
+                 env_vars=None,
+                 post_cmd=None,
+                 owners=None):
         """
 
-        :param exe_args:
+        :param exe_args: overrides arguments specified in the constructor
+        :param extra_args: appends arguments to the ones specified in the constructor
         :param compare_spec:
         :param pre_cmd:
         :param env_vars:
@@ -130,12 +144,18 @@ class ExeTestCaseDecorator:
             else:
                 exe_args = ''
 
+        if extra_args is not None:
+            exe_args += ' ' + extra_args
+
+        if compare_spec is None:
+            compare_spec = self._compare_spec
+
         self._compare_only = self.COMPARE_ONLY_ENV_VAR in os.environ
 
         def func_wrapper(test_func):
             """
             :param test_func:
-            :return:
+            :return: decorated function
             """
             test_name = test_func.__name__.split("_", 1)[-1]
 
@@ -157,7 +177,6 @@ class ExeTestCaseDecorator:
 
             def doc_gist(func):
                 """
-
                 :param func:
                 :return:
                 """
@@ -190,7 +209,8 @@ class ExeTestCaseDecorator:
 
         if self.do_test_rebase():
             if not sys.stdout.isatty():
-                raise Exception("cannot rebase unless confirmation prompt is displayed in terminal"
+                raise Exception("cannot rebase unless confirmation "
+                                "prompt is displayed in terminal"
                                 "make sure you are using --nocapture option")
 
         with working_dir(self.test_root):
@@ -252,7 +272,9 @@ class ExeTestCaseDecorator:
 
         for ref_file, _new_file in files_to_compare:
             if not os.path.exists(ref_file):
-                raise Exception(f"Missing reference file: {ref_file} - you can rebase by using {self.REBASE_ENV_VAR}= environment variable")
+                raise Exception(f"Missing reference file: {ref_file} - "
+                                f"you can rebase by using "
+                                f"{self.REBASE_ENV_VAR}= environment variable")
 
         for ref_file, new_file in files_to_compare:
             self.diff_files(ref_file, new_file)
@@ -305,16 +327,14 @@ class ExeTestCaseDecorator:
         else:
             return False
 
-    def infer_new_from_ref(self, ref_file_path, test_subdir):
-        if ref_file_path.startswith(self.REF_OUTPUT_DIR):
-            relative_dir = ref_file_path.split(self.REF_OUTPUT_DIR)[-1]
-            return os.path.join(self.TMP_OUTPUT_DIR, relative_dir[1:])
-        elif not os.path.isabs(ref_file_path):
-            return os.path.join(self.TMP_OUTPUT_DIR, test_subdir, ref_file_path)
-        elif os.path.isdir(ref_file_path):
-            return os.path.join(self.TMP_OUTPUT_DIR, test_subdir)
+    def make_dir_path(self, dir_stem, test_name, nested_dir):
+        if self.test_name_as_dir:
+            if nested_dir:
+                return os.path.join(test_name, dir_stem)
+            else:
+                return os.path.join(dir_stem, test_name)
         else:
-            return os.path.join(self.TMP_OUTPUT_DIR, test_subdir, os.path.basename(ref_file_path))
+            return dir_stem
 
     def get_files_to_compare(self, compare_spec, test_name):
         """
@@ -322,17 +342,15 @@ class ExeTestCaseDecorator:
         :param test_name: name of the test
         :return: a list of pairs of filepaths to compare: [(ref_file_path, new_file_path), ...]
         """
+
+        ref_dir = self.get_ref_dir(test_name)
+
         if compare_spec is None:
-            if self.test_name_as_dir:
-                compare_spec = os.path.join(self.REF_OUTPUT_DIR, test_name)
-            else:
-                compare_spec = self.REF_OUTPUT_DIR
+            compare_spec = ref_dir
 
             if not os.path.exists(compare_spec):
-                if self.test_name_as_dir:
-                    return (compare_spec, os.path.join(self.TMP_OUTPUT_DIR, test_name)),
-                else:
-                    return (compare_spec, self.TMP_OUTPUT_DIR),
+                out_dir = self.get_output_dir(test_name)
+                return [(ref_dir, out_dir)]
 
         elif not compare_spec:
             return []
@@ -348,7 +366,7 @@ class ExeTestCaseDecorator:
             if isinstance(compare_spec, dict):
                 new_path = compare_spec[ref_path]
             else:
-                new_path = self.infer_new_from_ref(ref_path, test_name)
+                new_path = self.get_output_dir(test_name)
 
             if os.path.isdir(ref_path):
                 # add all files under ref directory
@@ -366,14 +384,7 @@ class ExeTestCaseDecorator:
             else:
 
                 if not os.path.exists(ref_path):
-                    if self.test_name_as_dir:
-                        test_subdir = self.get_test_subdir(test_name)
-                        if not os.path.exists(os.path.join(self.REF_OUTPUT_DIR, test_subdir)):
-                            raise Exception(f'missing test subdirectory: {test_subdir} in {self.REF_OUTPUT_DIR}')
-                    else:
-                        test_subdir = ''
-
-                    ref_path = os.path.join(self.REF_OUTPUT_DIR, test_subdir, ref_path)
+                    ref_path = os.path.join(ref_dir, ref_path)
 
                 files_to_compare.append((ref_path, new_path))
 

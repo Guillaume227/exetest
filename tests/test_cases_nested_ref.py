@@ -7,11 +7,11 @@ path_to_exe = os.path.join(parent_dir, 'myexe')
 # Create a test case decorator for the executable we want to test:
 myexe_testcase = ExeTestCaseDecorator(exe=path_to_exe,
                                       test_root=parent_dir,
-                                      nested_ref_dir=False)
+                                      nested_ref_dir=True)
 
 
 @myexe_testcase()
-def test_a():
+def test_d():
     """
     basic scenario case
     """
@@ -24,7 +24,7 @@ def validate_message(message):
 
 @expects_exception(expected_message_validator=validate_message)
 @myexe_testcase()
-def test_b():
+def test_e():
     """
     this test is setup to fail with a difference
     in output compared to ref
@@ -33,7 +33,7 @@ def test_b():
 
 
 @myexe_testcase(exe_args='-N 4')
-def test_c():
+def test_f():
     """
     passing arguments to the exe to test
     """
