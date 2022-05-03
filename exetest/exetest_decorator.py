@@ -9,7 +9,7 @@ import sys
 import unittest
 
 
-class ExeTestCase:
+class ExeTestCaseDecorator:
     """
     A test case decorator for testing an executable outputs
     by comparing new output to reference output
@@ -22,9 +22,9 @@ class ExeTestCase:
 
     def __init__(self,
                  exe,
-                 ref_dir,
-                 out_dir,
-                 test_root,  # =os.path.dirname(__file__),
+                 test_root='.',  # =os.path.dirname(__file__),
+                 ref_dir='ref_dir',
+                 out_dir='out_dir',
                  exe_args=None,
                  run_from_out_dir=True,
                  test_name_as_dir=True,
@@ -37,9 +37,9 @@ class ExeTestCase:
         """
 
         :param exe:
-        :param ref_dir: absolute path or relative to directory where test case is defined
+        :param test_root: working directory for test execution from which ref_dir/out_dir paths are defined if relative.
+        :param ref_dir: absolute path or relative to test_root directory where test case is defined
         :param out_dir:
-        :param test_root:
         :param exe_args: test executable arguments in string format - as would be passed to command line
         :param run_from_out_dir: whether the executable working directory should be the output directory
         :param test_name_as_dir: whether the test name should be used to infer the ref and output directories

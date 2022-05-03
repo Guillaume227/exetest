@@ -1,13 +1,12 @@
-from exetest import ExeTestCase, expects_exception
+from exetest import ExeTestCaseDecorator, expects_exception
 import os
 
 parent_dir = os.path.dirname(__file__)
 path_to_exe = os.path.join(parent_dir, 'myexe')
 
-myexe_testcase = ExeTestCase(exe=path_to_exe,
-                             ref_dir='ref_dir',
-                             out_dir='out_dir',
-                             test_root=parent_dir)
+# Create a test case decorator for the executable we want to test:
+myexe_testcase = ExeTestCaseDecorator(exe=path_to_exe,
+                                      test_root=parent_dir)
 
 
 @myexe_testcase()
