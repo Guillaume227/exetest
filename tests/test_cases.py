@@ -29,7 +29,7 @@ def test_b():
 
 
 @myexe_testcase(exe_args='-N 4')
-def test_d():
+def test_c():
     """
     passing arguments to the exe to test
     """
