@@ -119,7 +119,7 @@ def handle_subprocess_error(exc):
 
 def exec_cmdline(command, args_list, check_ret_code=True,
                  log_save_path=None, env_vars=None,
-                 pre_cmd=None, post_cmd=None):
+                 pre_cmd=None, post_cmd=None, verbose=True):
     """
     Runs command and returns the captured stdout log
     :param command:
@@ -129,6 +129,7 @@ def exec_cmdline(command, args_list, check_ret_code=True,
     :param env_vars:
     :param pre_cmd:
     :param post_cmd:
+    :param verbose:
     :return:
     """
 
@@ -159,11 +160,12 @@ def exec_cmdline(command, args_list, check_ret_code=True,
     if post_cmd:
         cmd_line += ' && ' + ' && '.join(post_cmd)
 
-    print()
-    print('working dir/command line:')
-    print(os.getcwd())
-    print(cmd_line)
-    print()
+    if verbose:
+        print()
+        print('working dir/command line:')
+        print(os.getcwd())
+        print(cmd_line)
+        print()
 
     if not os.path.exists(command):
         raise Exception(f'{command} '

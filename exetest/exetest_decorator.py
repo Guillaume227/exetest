@@ -18,6 +18,7 @@ class ExeTestCase:
     USE_EXE_ENV_VAR = 'USE_TEST_EXE'
     REBASE_ENV_VAR = 'DO_TEST_REBASE'
     COMPARE_ONLY_ENV_VAR = 'COMPARE_ONLY'
+    EXETEST_VERBOSE_ENV_VAR = 'EXETEST_VERBOSE'
 
     def __init__(self,
                  exe,
@@ -87,6 +88,8 @@ class ExeTestCase:
         self.exe_args = exe_args
         self.log_output_path = log_output_path
 
+        self.verbose = os.environ.get(self.EXETEST_VERBOSE_ENV_VAR, False)
+
     @staticmethod
     def get_test_subdir(test_name):
         return test_name
@@ -145,7 +148,8 @@ class ExeTestCase:
                                   pre_cmd=pre_cmds,
                                   env_vars=all_env_vars,
                                   post_cmd=post_cmd,
-                                  test_name=test_name)
+                                  test_name=test_name,
+                                  verbose=self.verbose)
                 except unittest.SkipTest:
                     raise
 
@@ -182,7 +186,7 @@ class ExeTestCase:
         """
         return os.getenv(cls.REBASE_ENV_VAR) is not None
 
-    def run_test(self, exe_args, compare_spec, pre_cmd, env_vars, post_cmd, test_name):
+    def run_test(self, exe_args, compare_spec, pre_cmd, env_vars, post_cmd, test_name, verbose):
 
         if self.do_test_rebase():
             if not sys.stdout.isatty():
@@ -222,7 +226,8 @@ class ExeTestCase:
                                                 pre_cmd=pre_cmd,
                                                 env_vars=env_vars,
                                                 post_cmd=post_cmd,
-                                                log_save_path=self.log_output_path)
+                                                log_save_path=self.log_output_path,
+                                                verbose=verbose)
                     except Exception as exc:
                         if self.exception_handler:
                             self.exception_handler(exc)
