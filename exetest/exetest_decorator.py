@@ -17,7 +17,7 @@ class ExeTestCase:
 
     USE_EXE_ENV_VAR = 'USE_TEST_EXE'
     REBASE_ENV_VAR = 'DO_TEST_REBASE'
-    COMPARE_ONLY_ENV_VAR = 'COMPARE_ONLY'
+    COMPARE_ONLY_ENV_VAR = 'EXETEST_COMPARE_ONLY'
     EXETEST_VERBOSE_ENV_VAR = 'EXETEST_VERBOSE'
 
     def __init__(self,
@@ -88,7 +88,7 @@ class ExeTestCase:
         self.exe_args = exe_args
         self.log_output_path = log_output_path
 
-        self.verbose = os.environ.get(self.EXETEST_VERBOSE_ENV_VAR, False)
+        self.verbose = self.EXETEST_VERBOSE_ENV_VAR in os.environ
 
     @staticmethod
     def get_test_subdir(test_name):
@@ -130,7 +130,7 @@ class ExeTestCase:
             else:
                 exe_args = ''
 
-        self._compare_only = os.environ.get(self.COMPARE_ONLY_ENV_VAR, False)
+        self._compare_only = self.COMPARE_ONLY_ENV_VAR in os.environ
 
         def func_wrapper(test_func):
             """

@@ -18,7 +18,11 @@ def test_a():
     pass
 
 
-@expects_exception()
+def validate_message(message):
+    return 'files differ' in message
+
+
+@expects_exception(expected_message_validator=validate_message)
 @myexe_testcase()
 def test_b():
     """

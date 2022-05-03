@@ -19,11 +19,17 @@ if __name__ == "__main__":
     parser.add_argument("--verbose",
                         help="verbose flag",
                         action='store_true')
+    parser.add_argument("--compare-only",
+                        help="verbose flag",
+                        action='store_true')
+
     args = parser.parse_args()
 
     env_vars = ''
     if args.rebase:
         env_vars += 'DO_TEST_REBASE= '
+    if args.compare_only:
+        env_vars += 'EXETEST_COMPARE_ONLY= '
     if args.verbose:
         env_vars += 'EXETEST_VERBOSE= '
 
