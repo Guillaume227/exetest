@@ -37,7 +37,7 @@ if __name__ == "__main__":
     if env_vars:
         command_str = "env " + env_vars
 
-    command_str += f'pytest --capture=no --durations=50'
+    command_str += f'pytest-3 --capture=no --durations=50'
     if args.verbose:
         command_str += ' --log-cli-level=INFO -v'
 
