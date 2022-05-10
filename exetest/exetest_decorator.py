@@ -205,17 +205,19 @@ class ExeTestCaseDecorator:
         """
         return os.getenv(cls.REBASE_ENV_VAR) is not None
 
-    def run_test(self, exe_args, compare_spec, pre_cmd, env_vars, post_cmd, test_name, verbose):
+    def run_test(self, exe_args, compare_spec,
+                 pre_cmd, env_vars, post_cmd, test_name,
+                 verbose):
 
         if self.do_test_rebase():
             if not sys.stdout.isatty():
                 raise Exception("cannot rebase unless confirmation "
-                                "prompt is displayed in terminal"
-                                "make sure you are using --nocapture option")
+                                "prompt is displayed in terminal. "
+                                "Make sure you are using --nocapture option")
 
         with working_dir(self.test_root):
 
-            files_to_compare = self.get_files_to_compare(compare_spec, test_name)
+            files_to_compare = self.get_files_to_compare(test_name, compare_spec)
 
             if compare_spec and not files_to_compare:
                 raise Exception(f"No reference output files for {compare_spec}")
@@ -336,10 +338,14 @@ class ExeTestCaseDecorator:
         else:
             return dir_stem
 
-    def get_files_to_compare(self, compare_spec, test_name):
+    def get_files_to_compare(self, test_name, compare_spec=None):
         """
-        :param compare_spec: specifies output files to compare
-        :param test_name: name of the test
+        :param test_name: name of the test, used to deduce the ref dir path.
+        :param compare_spec: specifies output files to compare; either:
+                - a path to a file
+                - a path to a directory (in which case all its contents are compared)
+                - a list of those.
+            if left to its None default, compares everything in ref_dir
         :return: a list of pairs of filepaths to compare: [(ref_file_path, new_file_path), ...]
         """
 
