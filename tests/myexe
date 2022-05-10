@@ -14,6 +14,7 @@ if __name__ == "__main__":
     parser.add_argument("--squared-even-lines", help="whether to square even line numbers", action='store_true')
     parser.add_argument("--output-file", help="output file name", default="myexe_output.txt")
     parser.add_argument("--output-path", help="output file path", default=".")
+    parser.add_argument("--log", help="log file name - no log if left empty", default="")
     args = parser.parse_args()
 
     with open(os.path.join(args.output_path, args.output_file), 'w') as f:
@@ -22,3 +23,9 @@ if __name__ == "__main__":
             if args.squared_even_lines and i % 2 == 0:
                 num = i * i
             f.write(f'output line {num}\n')
+
+    if args.log:
+        with open(os.path.join(args.output_path, args.log), 'w') as f:
+            f.write('log_line')
+
+
