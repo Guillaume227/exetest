@@ -3,6 +3,7 @@
 import subprocess
 import argparse
 import os
+import sys
 
 if __name__ == "__main__":
 
@@ -62,4 +63,6 @@ if __name__ == "__main__":
     if args.verbose:
         print('running:\n', command_str)
 
-    subprocess.run(command_str.split())
+    proc = subprocess.run(command_str.split())
+    sys.exit(proc.returncode)
+
