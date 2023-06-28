@@ -62,7 +62,7 @@ def default_file_diff(file_path1, file_path2, print_diff=True, ignore_lines=tupl
                 break
 
         if num_diffs == 0:
-            if ignored_diffs == 0 and platform.system() != 'Windows':
+            if ignored_diffs > 0 and platform.system() != 'Windows':
                 print('        Ignoring Diff on {0} coming from line endings unix vs windows'.format(file_path1))
 
             return True

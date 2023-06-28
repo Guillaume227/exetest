@@ -205,22 +205,25 @@ class ExeTestCaseDecorator:
         """
         return os.getenv(cls.REBASE_ENV_VAR) is not None
 
+    def raise_exception(self, msg):
+        raise Exception(msg)
+
     def run_test(self, exe_args, compare_spec,
                  pre_cmd, env_vars, post_cmd, test_name,
                  verbose):
 
         if self.do_test_rebase():
             if not sys.stdout.isatty():
-                raise Exception("cannot rebase unless confirmation "
-                                "prompt is displayed in terminal. "
-                                "Make sure you are using --nocapture option")
+                self.raise_exception("cannot rebase unless confirmation "
+                                     "prompt is displayed in terminal. "
+                                     "Make sure you are using --nocapture option")
 
         with working_dir(self.test_root):
 
             files_to_compare = self.get_files_to_compare(test_name, compare_spec)
 
             if compare_spec and not files_to_compare:
-                raise Exception(f"No reference output files for {compare_spec}")
+                self.raise_exception(f"No reference output files for {compare_spec}")
 
             created_dirs = []
             for ref_file, new_file, in files_to_compare:
@@ -260,7 +263,7 @@ class ExeTestCaseDecorator:
 
                 for _ref_file, new_file in files_to_compare:
                     if not os.path.exists(new_file):
-                        raise Exception(f"Missing output file: {new_file}")
+                        self.raise_exception(f"Missing output file: {new_file}")
 
                 if self.do_test_rebase():
                     self.run_rebase_compare(files_to_compare)
@@ -274,9 +277,9 @@ class ExeTestCaseDecorator:
 
         for ref_file, _new_file in files_to_compare:
             if not os.path.exists(ref_file):
-                raise Exception(f"Missing reference file: {ref_file} - "
-                                f"you can rebase by using "
-                                f"{self.REBASE_ENV_VAR}= environment variable")
+                self.raise_exception(f"Missing reference file: {ref_file} - "
+                                     f"you can rebase by using "
+                                     f"{self.REBASE_ENV_VAR}= environment variable")
 
         for ref_file, new_file in files_to_compare:
             self.diff_files(ref_file, new_file)
@@ -308,11 +311,11 @@ class ExeTestCaseDecorator:
                 print("aborting rebase for", ref_file)
 
         if failed_rebase_msg:
-            raise Exception(f'failed rebasing tests: {failed_rebase_msg}')
+            self.raise_exception(f'failed rebasing tests: {failed_rebase_msg}')
 
     def diff_files(self, ref_file, new_file, throw=True):
 
-        file_ext = ref_file.rsplit('.', 1)[0]
+        file_ext = ref_file.rsplit('.', 1)[-1]
         comparator_func = self.comparators.get(file_ext, default_file_diff)
 
         max_len = max(len(ref_file), len(new_file)) + 10
@@ -325,7 +328,7 @@ class ExeTestCaseDecorator:
             return True
         elif throw:
             error_msg = f'files differ:{files_info}'
-            raise Exception(error_msg)
+            self.raise_exception(error_msg)
         else:
             return False
 
@@ -369,7 +372,12 @@ class ExeTestCaseDecorator:
 
         for ref_path in compare_spec:
 
-            if isinstance(compare_spec, dict):
+            if isinstance(ref_path, tuple):
+                file1, file2 = ref_path
+                out_dir = self.get_output_dir(test_name)
+                files_to_compare.append(os.path.join(ref_dir, file1), os.path.join(out_dir, file2))
+                continue
+            elif isinstance(compare_spec, dict):
                 new_path = compare_spec[ref_path]
             else:
                 new_path = self.get_output_dir(test_name)
@@ -392,7 +400,7 @@ class ExeTestCaseDecorator:
                 if not os.path.exists(ref_path):
                     ref_path = os.path.join(ref_dir, ref_path)
 
-                #raise Exception(ref_path.replace(ref_dir, new_path))
+                # self.raise_exception(ref_path.replace(ref_dir, new_path))
                 files_to_compare.append((ref_path, ref_path.replace(ref_dir, new_path)))
 
         return files_to_compare
