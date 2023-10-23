@@ -51,14 +51,15 @@ def revert_file_modif(file_path):
 
 
 @contextmanager
-def perf_timer(message='Time elapsed:'):
+def perf_timer(message='Time elapsed:', verbose=True):
     """timer context (includes time spent during process sleep)"""
     start_time = time.perf_counter()
     try:
         yield
     finally:
-        time_elapsed = time.perf_counter() - start_time
-        print(message, '%.3fsec' % time_elapsed)
+        if verbose:
+            time_elapsed = time.perf_counter() - start_time
+            print(message, '%.3fsec' % time_elapsed)
 
 
 def diff_directory(path1, path2):
@@ -106,7 +107,7 @@ def format_log_for_exception(exc, max_num_lines=20):
         msg_len = len(message)
 
         if msg_len > len(last_few_lines):
-            return f'[truncated to last {max_num_lines} lines\n' + last_few_lines
+            return last_few_lines + f'\n[truncated to last {max_num_lines} lines\n'
         else:
             return last_few_lines
 
@@ -119,7 +120,7 @@ def handle_subprocess_error(exc):
 
 def exec_cmdline(command, args_list, check_ret_code=True,
                  log_save_path=None, env_vars=None,
-                 pre_cmd=None, post_cmd=None, verbose=True):
+                 pre_cmd=None, post_cmd=None, verbose=True, norun=False):
     """
     Runs command and returns the captured stdout log
     :param command:
@@ -167,27 +168,30 @@ def exec_cmdline(command, args_list, check_ret_code=True,
         print(cmd_line)
         print()
 
-    if not os.path.exists(command):
-        raise Exception(f'{command} '
-                        f'not found from {os.getcwd()}. '
-                        f'Is it in your path? Did you compile?')
+    if not norun:
+        if not os.path.exists(command):
+            raise Exception(f'{command} '
+                            f'not found from {os.getcwd()}. '
+                            f'Is it in your path? Did you compile?')
 
-    exe_name = os.path.basename(command.split()[0])
-    try:
-        with perf_timer(exe_name + ' execution took '):
-            result_info = subprocess.run(cmd_line, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+        exe_name = os.path.basename(command.split()[0])
+        try:
+            with perf_timer(exe_name + ' execution took '):
+                result_info = subprocess.run(cmd_line, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
 
-        log_out = result_info.stdout
-        if log_save_path is not None:
-            # log_out = log_out.decode('latin-1')
-            with open(log_save_path, 'wb') as f:
-                f.write(log_out)
+            log_out = result_info.stdout
+            if log_save_path is not None:
+                # log_out = log_out.decode('latin-1')
+                with open(log_save_path, 'wb') as f:
+                    f.write(log_out)
 
-        if check_ret_code:
-            result_info.check_returncode()
+            if check_ret_code:
+                result_info.check_returncode()
 
-        return log_out
+            return log_out
 
-    except subprocess.CalledProcessError as exc:
-        handle_subprocess_error(exc)
-        raise
+        except subprocess.CalledProcessError as exc:
+            handle_subprocess_error(exc)
+            raise
+
+    return cmd_line

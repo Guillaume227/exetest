@@ -3,7 +3,7 @@ import os
 
 parent_dir = os.path.dirname(__file__)
 path_to_exe = os.path.join(parent_dir, 'myexe')
-
+print('path_to_exe')
 # Create a test case decorator for the executable we want to test:
 myexe_testcase = ExeTestCaseDecorator(exe=path_to_exe,
                                       test_root=parent_dir,
@@ -16,6 +16,20 @@ def test_a():
     basic scenario case
     """
     pass
+
+'''
+@myexe_testcase(exe_args='--log myexe.log',
+                compare_spec="*.txt")
+def test_ignore_log():
+    pass
+
+
+@expects_exception()
+@myexe_testcase(exe_args='--log myexe.log')
+def test_not_ignored_log():
+    pass
+
+'''
 
 
 def validate_message(message):

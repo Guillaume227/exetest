@@ -4,10 +4,12 @@ import subprocess
 import argparse
 import os
 import sys
+from exetest import ExeTestEnvVars
 
 if __name__ == "__main__":
 
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(prog='test runner',
+                                     description='')
     parser.add_argument("test_cases", nargs='*',
                         help="test cases to run - leave empty for running all tests",
                         default="")
@@ -21,18 +23,23 @@ if __name__ == "__main__":
                         help="verbose flag",
                         action='store_true')
     parser.add_argument("--compare-only",
-                        help="verbose flag",
+                        help="run the compare step only (do not run the tests)",
+                        action='store_true')
+    parser.add_argument("--norun",
+                        help="print test commands without running the tests",
                         action='store_true')
 
     args = parser.parse_args()
 
     env_vars = ''
     if args.rebase:
-        env_vars += 'DO_TEST_REBASE= '
+        env_vars += f'{ExeTestEnvVars.REBASE}= '
     if args.compare_only:
-        env_vars += 'EXETEST_COMPARE_ONLY= '
+        env_vars += f'{ExeTestEnvVars.COMPARE_ONLY}= '
     if args.verbose:
-        env_vars += 'EXETEST_VERBOSE= '
+        env_vars += f'{ExeTestEnvVars.VERBOSE}= '
+    if args.norun:
+        env_vars += f'{ExeTestEnvVars.NO_RUN}=1 '
 
     command_str = ''
     if env_vars:

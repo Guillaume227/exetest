@@ -2,11 +2,30 @@ import os
 import os.path
 from . import misc_utils
 from .misc_utils import working_dir, rmdir
-from .diff_utils import default_file_diff
+from .diff_utils import FileComparator
 from functools import wraps
 import shutil
 import sys
 import unittest
+from .env_vars import ExeTestEnvVars
+import pytest
+
+
+def skip_test(reason=''):
+    """
+    A decorator for marking tests as skipped and still allowing to force-run them.
+    Bypassing behavior is triggered by the presence of an environment variable.
+    :param reason: why the test is being skipped
+    """
+    if ExeTestEnvVars.DISABLE_SKIP in os.environ:
+        return lambda x: x
+    else:
+        return pytest.mark.skip(reason=reason)
+
+
+def skip_module(reason=''):
+    if ExeTestEnvVars.DISABLE_SKIP not in os.environ:
+        pytest.skip(reason, allow_module_level=True)
 
 
 class ExeTestCaseDecorator:
@@ -14,11 +33,6 @@ class ExeTestCaseDecorator:
     A test case decorator for testing an executable outputs
     by comparing new output to reference output
     """
-
-    USE_EXE_ENV_VAR = 'USE_TEST_EXE'
-    REBASE_ENV_VAR = 'DO_TEST_REBASE'
-    COMPARE_ONLY_ENV_VAR = 'EXETEST_COMPARE_ONLY'
-    EXETEST_VERBOSE_ENV_VAR = 'EXETEST_VERBOSE'
 
     def __init__(self,
                  exe,
@@ -33,16 +47,17 @@ class ExeTestCaseDecorator:
                  nested_out_dir=False,
                  comparators=None,
                  exception_handler=None,
+                 keep_output_on_success=False,
                  env_vars=None,
                  pre_cmd=None,
                  exe_path_ref=None,
                  log_output_path=None):
         """
 
-        :param exe:
+        :param exe: path to the executable to test
         :param test_root: working directory for test execution from which ref_dir/out_dir paths are defined if relative.
         :param ref_dir: absolute path or relative to test_root directory where test case is defined
-        :param out_dir:
+        :param out_dir: directory to write test output to
         :param exe_args: test executable arguments in string format - as would be passed to command line
         :param run_from_out_dir: whether the executable working directory should be the output directory
         :param test_name_as_dir: whether the test name should be used to infer the ref and output directories
@@ -62,16 +77,19 @@ class ExeTestCaseDecorator:
             if val in self.exe_path_ref:
                 return self.exe_path_ref[val]
             elif val:
-                return val
+                if os.path.isdir(val):
+                    return os.path.join(val, os.path.basename(exe))
+                else:
+                    return val
             else:
                 return exe
 
-        rebase_exe = os.environ.get(self.REBASE_ENV_VAR)
-        use_test_exe = os.environ.get(self.USE_EXE_ENV_VAR)
+        rebase_exe = os.environ.get(ExeTestEnvVars.REBASE)
+        use_test_exe = os.environ.get(ExeTestEnvVars.USE_EXE)
 
         # if USE_TEST_EXE has special target value, run against reference executable
         if rebase_exe is not None:
-            assert use_test_exe is None, f"{self.REBASE_ENV_VAR} and {self.USE_EXE_ENV_VAR} are mutually exclusive"
+            assert use_test_exe is None, f"{ExeTestEnvVars.REBASE} and {ExeTestEnvVars.USE_EXE} are mutually exclusive"
             self.exe_path = get_test_exe(rebase_exe)
 
         elif use_test_exe is not None:
@@ -93,10 +111,19 @@ class ExeTestCaseDecorator:
         self.exe_args = exe_args
         self.log_output_path = log_output_path
 
-        self.verbose = self.EXETEST_VERBOSE_ENV_VAR in os.environ
+        self.verbose = ExeTestEnvVars.VERBOSE in os.environ
+        if ExeTestEnvVars.NO_RUN in os.environ:
+            self.norun = os.environ[ExeTestEnvVars.NO_RUN]
+            if not self.norun:
+                self.norun = 'default'
+        else:
+            self.norun = None
+
         self._compare_spec = compare_spec
         self._nested_ref_dir = nested_ref_dir
         self._nested_out_dir = nested_out_dir
+        self._keep_output_on_success = True if ExeTestEnvVars.KEEP_OUTPUT_ON_SUCCESS in os.environ else keep_output_on_success
+        self._num_lines_diff = int(os.environ.get(ExeTestEnvVars.NUM_DIFFS, 20))
 
     @staticmethod
     def get_test_subdir(test_name):
@@ -150,7 +177,7 @@ class ExeTestCaseDecorator:
         if compare_spec is None:
             compare_spec = self._compare_spec
 
-        self._compare_only = self.COMPARE_ONLY_ENV_VAR in os.environ
+        self._compare_only = ExeTestEnvVars.COMPARE_ONLY in os.environ
 
         def func_wrapper(test_func):
             """
@@ -158,6 +185,8 @@ class ExeTestCaseDecorator:
             :return: decorated function
             """
             test_name = test_func.__name__.split("_", 1)[-1]
+            import inspect
+            parent_module_name = inspect.getmodule(test_func).__name__
 
             @wraps(test_func)
             def f(*args, **kwargs):
@@ -169,6 +198,7 @@ class ExeTestCaseDecorator:
                                   env_vars=all_env_vars,
                                   post_cmd=post_cmd,
                                   test_name=test_name,
+                                  parent_module_name=parent_module_name,
                                   verbose=self.verbose)
                 except unittest.SkipTest:
                     raise
@@ -203,13 +233,14 @@ class ExeTestCaseDecorator:
         """
         :return: whether to run test in rebase mode
         """
-        return os.getenv(cls.REBASE_ENV_VAR) is not None
+        return os.getenv(ExeTestEnvVars.REBASE) is not None
 
     def raise_exception(self, msg):
         raise Exception(msg)
 
     def run_test(self, exe_args, compare_spec,
-                 pre_cmd, env_vars, post_cmd, test_name,
+                 pre_cmd, env_vars, post_cmd,
+                 test_name, parent_module_name,
                  verbose):
 
         if self.do_test_rebase():
@@ -226,7 +257,7 @@ class ExeTestCaseDecorator:
                 self.raise_exception(f"No reference output files for {compare_spec}")
 
             created_dirs = []
-            for ref_file, new_file, in files_to_compare:
+            for ref_file, new_file in files_to_compare:
 
                 if os.path.isdir(ref_file):
                     file_dir = new_file
@@ -237,27 +268,40 @@ class ExeTestCaseDecorator:
                     os.makedirs(file_dir, exist_ok=True)
                     created_dirs.append(file_dir)
 
-            if not self._compare_only:
+            tmp_output_dir = self.get_output_dir(test_name)
+            run_from_dir = os.path.join(self.test_root, tmp_output_dir) \
+                if self.run_from_out_dir else self.test_root
 
-                tmp_output_dir = self.get_output_dir(test_name)
+            if not self._compare_only:
                 self.clear_dir(tmp_output_dir, recreate=True)
 
-                run_from_dir = os.path.join(self.test_root, tmp_output_dir) \
-                    if self.run_from_out_dir else self.test_root
+            with working_dir(run_from_dir):
+                try:
+                    misc_utils.exec_cmdline(self.exe_path, exe_args,
+                                            pre_cmd=pre_cmd,
+                                            env_vars=env_vars,
+                                            post_cmd=post_cmd,
+                                            log_save_path=self.log_output_path,
+                                            norun=self.norun or self._compare_only,
+                                            verbose=verbose)
+                except Exception as exc:
+                    if self.exception_handler:
+                        self.exception_handler(exc)
+                    else:
+                        raise
 
-                with working_dir(run_from_dir):
-                    try:
-                        misc_utils.exec_cmdline(self.exe_path, exe_args,
-                                                pre_cmd=pre_cmd,
-                                                env_vars=env_vars,
-                                                post_cmd=post_cmd,
-                                                log_save_path=self.log_output_path,
-                                                verbose=verbose)
-                    except Exception as exc:
-                        if self.exception_handler:
-                            self.exception_handler(exc)
-                        else:
-                            raise
+            if self.norun:
+                if self.norun == 'ctest':
+                    print()
+                    print('|'.join(
+                        str(item) for item in ((parent_module_name.replace('.', '/') + '.py::test_' + test_name),
+                                               run_from_dir,
+                                               ' '.join(f'{key}={val}' for key, val in env_vars.items()),
+                                               os.path.basename(self.exe_path),
+                                               exe_args)))
+                if not self._compare_only:
+                    # this will mark the test as skipped
+                    pytest.skip("no-run mode")
 
             with working_dir(self.test_root):
 
@@ -270,16 +314,16 @@ class ExeTestCaseDecorator:
                 else:
                     self.run_compare(files_to_compare)
 
-                for file_dir in created_dirs:
-                    rmdir(file_dir)
+                if not self._keep_output_on_success:
+                    for file_dir in created_dirs:
+                        rmdir(file_dir)
 
     def run_compare(self, files_to_compare):
 
         for ref_file, _new_file in files_to_compare:
             if not os.path.exists(ref_file):
                 self.raise_exception(f"Missing reference file: {ref_file} - "
-                                     f"you can rebase by using "
-                                     f"{self.REBASE_ENV_VAR}= environment variable")
+                                     f"you can rebase with --rebase option")
 
         for ref_file, new_file in files_to_compare:
             self.diff_files(ref_file, new_file)
@@ -294,9 +338,9 @@ class ExeTestCaseDecorator:
             elif self.diff_files(ref_file, new_file, throw=False):
                 continue
 
-            print(f"rebasing test - about to update gold copy: {new_file} -> {ref_file}")
+            print(f"rebasing test - about to update baseline: {new_file} -> {ref_file}")
 
-            if 'Y' == input("Are you sure? (Y/n) ").strip():
+            if 'Y' == input("Are you sure? (Y/[n]) ").strip():
                 try:
                     if os.path.isdir(new_file):
                         shutil.copytree(new_file, ref_file)
@@ -307,30 +351,50 @@ class ExeTestCaseDecorator:
                 except PermissionError as err:
                     failed_rebase_msg += f'\ncp {new_file} {ref_file}'
                     print('rebase failed', str(err))
+                else:
+                    print('rebase successful')
             else:
-                print("aborting rebase for", ref_file)
+                raise unittest.SkipTest(f"aborting rebase for {ref_file}")
 
         if failed_rebase_msg:
             self.raise_exception(f'failed rebasing tests: {failed_rebase_msg}')
 
+    def get_file_comparator(self, filename):
+        file_ext = filename.rsplit('.', 1)[-1]
+        default_comparator = FileComparator(max_diff_in_log=self._num_lines_diff)
+        return self.comparators.get(file_ext, default_comparator)
+
     def diff_files(self, ref_file, new_file, throw=True):
 
-        file_ext = ref_file.rsplit('.', 1)[-1]
-        comparator_func = self.comparators.get(file_ext, default_file_diff)
+        compare_functors = self.get_file_comparator(ref_file)
 
         max_len = max(len(ref_file), len(new_file)) + 10
         fmtd_file1 = ref_file.rjust(max_len)
         fmtd_file2 = new_file.rjust(max_len)
         files_info = f'\n{fmtd_file1}\n{fmtd_file2}'
 
-        if comparator_func(ref_file, new_file):
-            print(f"matching outputs:{files_info}")
-            return True
-        elif throw:
-            error_msg = f'files differ:{files_info}'
-            self.raise_exception(error_msg)
-        else:
-            return False
+        if not isinstance(compare_functors, (tuple, list)):
+            compare_functors = [compare_functors]
+
+        if self.verbose:
+            print()
+
+        for compare_functor in compare_functors:
+            comparison_description = compare_functor.description()
+            if comparison_description:
+                comparison_description = f' ({comparison_description})'
+            if compare_functor(ref_file, new_file):
+                if self.verbose:
+                    print(f'files match{comparison_description} {files_info}')
+            else:
+                error_msg = f'files differ{comparison_description} {files_info}'
+                if self.verbose:
+                    print(error_msg)
+                if throw:
+                    self.raise_exception(error_msg)
+                else:
+                    return False
+        return True
 
     def make_dir_path(self, dir_stem, test_name, nested_dir):
         if self.test_name_as_dir:
@@ -375,7 +439,7 @@ class ExeTestCaseDecorator:
             if isinstance(ref_path, tuple):
                 file1, file2 = ref_path
                 out_dir = self.get_output_dir(test_name)
-                files_to_compare.append(os.path.join(ref_dir, file1), os.path.join(out_dir, file2))
+                files_to_compare.append((os.path.join(ref_dir, file1), os.path.join(out_dir, file2)))
                 continue
             elif isinstance(compare_spec, dict):
                 new_path = compare_spec[ref_path]
@@ -404,9 +468,6 @@ class ExeTestCaseDecorator:
                 files_to_compare.append((ref_path, ref_path.replace(ref_dir, new_path)))
 
         return files_to_compare
-
-    def clear_tmp_dir(self, recreate=False):
-        self.clear_dir(self.TMP_OUTPUT_DIR, recreate=recreate)
 
     def clear_dir(self, dir_path, recreate=False):
         with working_dir(self.test_root):

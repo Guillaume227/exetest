@@ -38,7 +38,7 @@ def expects_exception(exception_type=Exception,
                     assert(expected_message_validator(message)), \
                         "exception message is not as expected"
 
-                return True
+                return
 
             raise Exception('Expected exception was not thrown. '
                             f'returned value: "{ret}"')
