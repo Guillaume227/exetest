@@ -1,75 +1,7 @@
 #!/usr/bin/python3
 
-import subprocess
-import argparse
-import os
-import sys
-from exetest import ExeTestEnvVars
+import exetest.runmain
 
 if __name__ == "__main__":
-
-    parser = argparse.ArgumentParser(prog='test runner',
-                                     description='')
-    parser.add_argument("test_cases", nargs='*',
-                        help="test cases to run - leave empty for running all tests",
-                        default="")
-    parser.add_argument("-k",
-                        help="pytest -k expression for selecting tests",
-                        default="")
-    parser.add_argument("--rebase",
-                        help="whether to prompt for tests rebase in case of difference to reference output",
-                        action='store_true')
-    parser.add_argument("--verbose",
-                        help="verbose flag",
-                        action='store_true')
-    parser.add_argument("--compare-only",
-                        help="run the compare step only (do not run the tests)",
-                        action='store_true')
-    parser.add_argument("--norun",
-                        help="print test commands without running the tests",
-                        action='store_true')
-
-    args = parser.parse_args()
-
-    env_vars = ''
-    if args.rebase:
-        env_vars += f'{ExeTestEnvVars.REBASE}= '
-    if args.compare_only:
-        env_vars += f'{ExeTestEnvVars.COMPARE_ONLY}= '
-    if args.verbose:
-        env_vars += f'{ExeTestEnvVars.VERBOSE}= '
-    if args.norun:
-        env_vars += f'{ExeTestEnvVars.NO_RUN}=1 '
-
-    command_str = ''
-    if env_vars:
-        command_str = "env " + env_vars
-
-    command_str += f'pytest-3 --capture=no --durations=50'
-    if args.verbose:
-        command_str += ' --log-cli-level=INFO -v'
-
-    if args.k:
-        command_str += f' -k {args.k}'
-
-    if args.test_cases:
-        test_cases = []
-        for test_case in args.test_cases:
-            if not os.path.exists(test_case):
-                if '::' not in test_case:
-                    if not test_case.startswith('test_'):
-                        test_case = 'test_' + test_case
-                    test_case = 'tests/test_cases.py::' + test_case
-            test_cases.append(test_case)
-
-        command_str += ' ' + ' '.join(test_cases)
-
-    elif not args.k:
-        command_str += ' tests'
-
-    if args.verbose:
-        print('running:\n', command_str)
-
-    proc = subprocess.run(command_str.split())
-    sys.exit(proc.returncode)
-
+    exetest.runmain.main(prog='exetest',
+                         description='exetest test runner')
