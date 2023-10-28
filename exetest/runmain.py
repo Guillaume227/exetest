@@ -8,7 +8,6 @@ from exetest import ExeTestEnvVars
 
 
 def main(prog, description=''):
-
     parser = argparse.ArgumentParser(prog=prog,
                                      description=description)
 
@@ -52,8 +51,8 @@ def main(prog, description=''):
                         type=int)
 
     parser.add_argument("--keep-output", "--ko",
-                       help="Keep output files on success",
-                       action="store_true")
+                        help="Keep output files on success",
+                        action="store_true")
 
     parser.add_argument("-t", "--show-timing",
                         help="show the N slowest tests",
@@ -73,44 +72,44 @@ def main(prog, description=''):
 
     args, other_pytest_args = parser.parse_known_args()
 
-    env_vars = ''
+    env_vars = {}
     command = ['pytest']
     verbose = False
 
     if args.no_skip:
-        env_vars += f'{ExeTestEnvVars.DISABLE_SKIP}= '
+        env_vars[ExeTestEnvVars.DISABLE_SKIP] = ''
 
     if args.collect_only:
         command += ['--collect-only', '-q']
 
     else:
-        env_vars += f'{ExeTestEnvVars.NUM_DIFFS}={args.num_diffs} '
+        env_vars[ExeTestEnvVars.NUM_DIFFS] = args.num_diffs
 
         if args.rebase is not None:
-            env_vars += f'{ExeTestEnvVars.REBASE}={args.rebase} '
+            env_vars[ExeTestEnvVars.REBASE] = args.rebase
         if args.compare_only:
-            env_vars += f'{ExeTestEnvVars.COMPARE_ONLY}= '
+            env_vars[ExeTestEnvVars.COMPARE_ONLY] = ''
         if args.keep_output:
-            env_vars += f'{ExeTestEnvVars.KEEP_OUTPUT_ON_SUCCESS}= '
+            env_vars[ExeTestEnvVars.KEEP_OUTPUT_ON_SUCCESS] = ''
 
         command += ['-v']
         verbose = len(args.test_cases) > 0 or args.verbose
 
         if verbose:
-            env_vars += f'{ExeTestEnvVars.VERBOSE}= '
+            env_vars[ExeTestEnvVars.VERBOSE] = ''
             command += ['--tb=short']
         else:
             command += ['--tb=line']
-            #command += ['--tb=no']
+            # command += ['--tb=no']
 
         if args.norun:
-            env_vars += f'{ExeTestEnvVars.NO_RUN}={args.norun} '
+            env_vars[ExeTestEnvVars.NO_RUN] = args.norun
 
         num_cores = args.num_cores
         if num_cores < 0 and args.norun is None:
             if args.rebase is None:
                 if len(args.test_cases) == 0:
-                    #default number of cores for running all tests
+                    # default number of cores for running all tests
                     num_cores = 32
                 elif len(args.test_cases) > 1:
                     # sensible default: set the number of workers to be the number of arguments
@@ -122,7 +121,7 @@ def main(prog, description=''):
             command += ['-n', str(num_cores)]
         else:
             if verbose or args.rebase is not None:
-                command += ['--capture=no'] # capture=no is incompatible with distributing tests
+                command += ['--capture=no']  # capture=no is incompatible with distributing tests
 
         if args.show_timing >= 0 and args.norun is None and not args.collect_only:
             command += [f'--durations={args.show_timing}']
@@ -147,7 +146,8 @@ def main(prog, description=''):
         command += other_pytest_args
 
     if env_vars:
-        command = env_vars.split() + command
+        env_var_str = [f'{k}={v}' for k, v in env_vars.items()]
+        command = env_var_str + command
 
     if verbose:
         command_tokens = []
@@ -162,4 +162,3 @@ def main(prog, description=''):
     proc = subprocess.run(command_str, shell=True, text=True)
 
     sys.exit(proc.returncode)
-
