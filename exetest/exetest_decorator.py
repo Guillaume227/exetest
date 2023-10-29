@@ -84,15 +84,10 @@ class ExeTestCaseDecorator:
             else:
                 return exe
 
-        rebase_exe = os.environ.get(ExeTestEnvVars.REBASE)
         use_test_exe = os.environ.get(ExeTestEnvVars.USE_EXE)
 
         # if USE_TEST_EXE has special target value, run against reference executable
-        if rebase_exe is not None:
-            assert use_test_exe is None, f"{ExeTestEnvVars.REBASE} and {ExeTestEnvVars.USE_EXE} are mutually exclusive"
-            self.exe_path = get_test_exe(rebase_exe)
-
-        elif use_test_exe is not None:
+        if use_test_exe is not None:
             self.exe_path = get_test_exe(use_test_exe)
         else:
             self.exe_path = exe
@@ -188,6 +183,10 @@ class ExeTestCaseDecorator:
             import inspect
             parent_module_name = inspect.getmodule(test_func).__name__
 
+            resolved_env_vars = {}
+            for name, value in all_env_vars.items():
+                resolved_env_vars[name] = value.format(test_name=test_name)
+
             @wraps(test_func)
             def f(*args, **kwargs):
                 ret = test_func(*args, **kwargs)
@@ -195,7 +194,7 @@ class ExeTestCaseDecorator:
                     self.run_test(exe_args,
                                   compare_spec,
                                   pre_cmd=pre_cmds,
-                                  env_vars=all_env_vars,
+                                  env_vars=resolved_env_vars,
                                   post_cmd=post_cmd,
                                   test_name=test_name,
                                   parent_module_name=parent_module_name,
@@ -231,9 +230,14 @@ class ExeTestCaseDecorator:
     @classmethod
     def do_test_rebase(cls):
         """
-        :return: whether to run test in rebase mode
+        :return: whether to run test in rebase mode, whether to not prompt for applying changes
         """
-        return os.getenv(ExeTestEnvVars.REBASE) is not None
+        val = os.getenv(ExeTestEnvVars.REBASE)
+        if val is None:
+            return False, False
+
+        do_rebase = val != '0'
+        return do_rebase, do_rebase and val != 'FORCE'
 
     def raise_exception(self, msg):
         raise Exception(msg)
@@ -243,11 +247,12 @@ class ExeTestCaseDecorator:
                  test_name, parent_module_name,
                  verbose):
 
-        if self.do_test_rebase():
+        do_rebase, rebase_with_prompt = self.do_test_rebase()
+        if rebase_with_prompt:
             if not sys.stdout.isatty():
                 self.raise_exception("cannot rebase unless confirmation "
                                      "prompt is displayed in terminal. "
-                                     "Make sure you are using --nocapture option")
+                                     "Make sure you are using --capture=no pytest option")
 
         with working_dir(self.test_root):
 
@@ -305,12 +310,8 @@ class ExeTestCaseDecorator:
 
             with working_dir(self.test_root):
 
-                for _ref_file, new_file in files_to_compare:
-                    if not os.path.exists(new_file):
-                        self.raise_exception(f"Missing output file: {new_file}")
-
-                if self.do_test_rebase():
-                    self.run_rebase_compare(files_to_compare)
+                if do_rebase:
+                    self.run_rebase_compare(files_to_compare, force_rebase=not rebase_with_prompt)
                 else:
                     self.run_compare(files_to_compare)
 
@@ -320,46 +321,77 @@ class ExeTestCaseDecorator:
 
     def run_compare(self, files_to_compare):
 
-        for ref_file, _new_file in files_to_compare:
-            if not os.path.exists(ref_file):
-                self.raise_exception(f"Missing reference file: {ref_file} - "
-                                     f"you can rebase with --rebase option")
+        for _ref_file, new_file in files_to_compare:
+            if not os.path.exists(new_file):
+                self.raise_exception(f"Missing output file: {new_file}")
+
+        for ref_file, new_file in files_to_compare:
+            has_ref = os.path.exists(ref_file)
+            has_new = os.path.exists(new_file)
+            if not has_ref and not has_new:
+                self.raise_exception(f"Missing both ref and new files:\n{ref_file}\n{new_file}")
+            else:
+                if not has_ref:
+                    self.raise_exception(f"Missing reference file: {ref_file} - "
+                                         f"you can rebase with --rebase option")
+                if not has_new:
+                    self.raise_exception(f"Missing output file: {new_file}")
 
         for ref_file, new_file in files_to_compare:
             self.diff_files(ref_file, new_file)
 
-    def run_rebase_compare(self, files_to_compare):
+    def run_rebase_compare(self, files_to_compare, force_rebase=False):
 
         failed_rebase_msg = ''
+        skip_rebase = False
 
         for ref_file, new_file in files_to_compare:
+
+            if not os.path.exists(new_file) and os.path.exists(ref_file):
+                print(f'{new_file} does not exist - remove it from reference output?')
+                if force_rebase or 'Y' == input("Remove it from reference output? (Y/[n]").strip():
+                    if os.path.isdir(ref_file):
+                        shutil.rmtree(ref_file)
+                    else:
+                        os.remove(ref_file)
+                continue
+
             if not os.path.exists(ref_file):
                 os.makedirs(os.path.dirname(ref_file), exist_ok=True)
             elif self.diff_files(ref_file, new_file, throw=False):
                 continue
 
             print(f"rebasing test - about to update baseline: {new_file} -> {ref_file}")
-
-            if 'Y' == input("Are you sure? (Y/[n]) ").strip():
-                try:
-                    if os.path.isdir(new_file):
-                        shutil.copytree(new_file, ref_file)
-                        shutil.rmtree(new_file)
+            try:
+                if force_rebase or 'Y' == input("Are you sure? (Y/[n]) ").strip():
+                    try:
+                        if os.path.isdir(new_file):
+                            shutil.copytree(new_file, ref_file)
+                            #shutil.rmtree(new_file)
+                        else:
+                            shutil.copy(new_file, ref_file)
+                            #os.remove(new_file)
+                    except PermissionError as err:
+                        failed_rebase_msg += f'\ncp {new_file} {ref_file}'
+                        print('rebase failed', str(err))
                     else:
-                        shutil.copy(new_file, ref_file)
-                        os.remove(new_file)
-                except PermissionError as err:
-                    failed_rebase_msg += f'\ncp {new_file} {ref_file}'
-                    print('rebase failed', str(err))
+                        print('rebase successful')
                 else:
-                    print('rebase successful')
-            else:
-                raise unittest.SkipTest(f"aborting rebase for {ref_file}")
+                    raise unittest.SkipTest(f"aborting rebase for {ref_file}")
+            except KeyboardInterrupt:
+                skip_rebase = True
+                break
+
+        if skip_rebase:
+            raise unittest.SkipTest('aborting rebase')
 
         if failed_rebase_msg:
             self.raise_exception(f'failed rebasing tests: {failed_rebase_msg}')
 
-    def get_file_comparator(self, filename):
+    def get_file_comparator(self, filepath):
+        filename = os.path.basename(filepath)
+        if filename in self.comparators:
+            return self.comparators[filename]
         file_ext = filename.rsplit('.', 1)[-1]
         default_comparator = FileComparator(max_diff_in_log=self._num_lines_diff)
         return self.comparators.get(file_ext, default_comparator)
@@ -367,6 +399,11 @@ class ExeTestCaseDecorator:
     def diff_files(self, ref_file, new_file, throw=True):
 
         compare_functors = self.get_file_comparator(ref_file)
+
+        if compare_functors is None:
+            # do not compare that file
+            print(f"ignoring file: {ref_file}")
+            return True
 
         max_len = max(len(ref_file), len(new_file)) + 10
         fmtd_file1 = ref_file.rjust(max_len)
@@ -439,7 +476,8 @@ class ExeTestCaseDecorator:
             if isinstance(ref_path, tuple):
                 file1, file2 = ref_path
                 out_dir = self.get_output_dir(test_name)
-                files_to_compare.append((os.path.join(ref_dir, file1), os.path.join(out_dir, file2)))
+                files_to_compare.append((os.path.join(ref_dir, file1),
+                                         os.path.join(out_dir, file2)))
                 continue
             elif isinstance(compare_spec, dict):
                 new_path = compare_spec[ref_path]
@@ -452,13 +490,11 @@ class ExeTestCaseDecorator:
                 new_path = os.path.normpath(new_path)
 
                 for dirpath, dirnames, filenames in os.walk(ref_path):
-                    if self.run_from_out_dir:
-                        tmp_path = new_path
-                    else:
-                        tmp_path = dirpath.replace(ref_path, new_path, 1)
+                    tmp_path = dirpath.replace(ref_path, new_path, 1)
 
                     for filename in filenames:
-                        files_to_compare.append((os.path.join(dirpath, filename), os.path.join(tmp_path, filename)))
+                        files_to_compare.append((os.path.join(dirpath, filename),
+                                                 os.path.join(tmp_path, filename)))
 
             else:
                 if not os.path.exists(ref_path):
