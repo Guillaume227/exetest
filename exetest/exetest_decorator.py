@@ -348,12 +348,13 @@ class ExeTestCaseDecorator:
         for ref_file, new_file in files_to_compare:
 
             if not os.path.exists(new_file) and os.path.exists(ref_file):
-                print(f'{new_file} does not exist - remove it from reference output?')
+                print(f'{new_file} does not exist')
                 if force_rebase or 'Y' == input("Remove it from reference output? (Y/[n]").strip():
                     if os.path.isdir(ref_file):
                         shutil.rmtree(ref_file)
                     else:
                         os.remove(ref_file)
+                    print(f'removed {new_file} from reference output')
                 continue
 
             if not os.path.exists(ref_file):
@@ -422,9 +423,9 @@ class ExeTestCaseDecorator:
                 comparison_description = f' ({comparison_description})'
             if compare_functor(ref_file, new_file):
                 if self.verbose:
-                    print(f'files match{comparison_description} {files_info}')
+                    print(f'files match{comparison_description}: {files_info}')
             else:
-                error_msg = f'files differ{comparison_description} {files_info}'
+                error_msg = f'files differ{comparison_description}: {files_info}'
                 if self.verbose:
                     print(error_msg)
                 if throw:

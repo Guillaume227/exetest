@@ -158,7 +158,6 @@ def main(prog, description=''):
         print('running:\n', ' '.join(command_tokens))
 
     command_str = ' '.join(command)
-    print(command_str)
     proc = subprocess.run(command_str, shell=True, text=True)
 
     sys.exit(proc.returncode)
