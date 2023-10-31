@@ -277,47 +277,49 @@ class ExeTestCaseDecorator:
             run_from_dir = os.path.join(self.test_root, tmp_output_dir) \
                 if self.run_from_out_dir else self.test_root
 
-            if not self._compare_only:
-                self.clear_dir(tmp_output_dir, recreate=True)
+        if not self._compare_only:
+            self.clear_dir(tmp_output_dir, recreate=True)
 
-            with working_dir(run_from_dir):
-                try:
-                    misc_utils.exec_cmdline(self.exe_path, exe_args,
-                                            pre_cmd=pre_cmd,
-                                            env_vars=env_vars,
-                                            post_cmd=post_cmd,
-                                            log_save_path=self.log_output_path,
-                                            norun=self.norun or self._compare_only,
-                                            verbose=verbose)
-                except Exception as exc:
-                    if self.exception_handler:
-                        self.exception_handler(exc)
-                    else:
-                        raise
-
-            if self.norun:
-                if self.norun == 'ctest':
-                    print()
-                    print('|'.join(
-                        str(item) for item in ((parent_module_name.replace('.', '/') + '.py::test_' + test_name),
-                                               run_from_dir,
-                                               ' '.join(f'{key}={val}' for key, val in env_vars.items()),
-                                               os.path.basename(self.exe_path),
-                                               exe_args)))
-                if not self._compare_only:
-                    # this will mark the test as skipped
-                    pytest.skip("no-run mode")
-
-            with working_dir(self.test_root):
-
-                if do_rebase:
-                    self.run_rebase_compare(files_to_compare, force_rebase=not rebase_with_prompt)
+        with working_dir(run_from_dir):
+            try:
+                misc_utils.exec_cmdline(self.exe_path,
+                                        exe_args,
+                                        pre_cmd=pre_cmd,
+                                        env_vars=env_vars,
+                                        post_cmd=post_cmd,
+                                        log_save_path=self.log_output_path,
+                                        norun=self.norun or self._compare_only,
+                                        verbose=verbose)
+            except Exception as exc:
+                if self.exception_handler:
+                    self.exception_handler(exc)
                 else:
-                    self.run_compare(files_to_compare)
+                    raise
 
-                if not self._keep_output_on_success:
-                    for file_dir in created_dirs:
-                        rmdir(file_dir)
+        if self.norun:
+            if self.norun == 'ctest':
+                print()
+                print('|'.join(
+                    str(item) for item in ((parent_module_name.replace('.', '/') + '.py::test_' + test_name),
+                                           run_from_dir,
+                                           ' '.join(f'{key}={val}' for key, val in env_vars.items()),
+                                           os.path.basename(self.exe_path),
+                                           exe_args)))
+            if not self._compare_only:
+                # this will mark the test as skipped
+                pytest.skip("no-run mode")
+
+        with working_dir(self.test_root):
+
+            if do_rebase:
+                self.run_rebase_compare(files_to_compare,
+                                        force_rebase=not rebase_with_prompt)
+            else:
+                self.run_compare(files_to_compare)
+
+            if not self._keep_output_on_success:
+                for file_dir in created_dirs:
+                    rmdir(file_dir)
 
     def run_compare(self, files_to_compare):
 
