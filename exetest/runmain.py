@@ -75,6 +75,8 @@ def main(prog, description=''):
     env_vars = {}
     command = ['pytest']
     verbose = False
+    two_step_rebase = False
+    rebase_arg = None
 
     if args.no_skip:
         env_vars[ExeTestEnvVars.DISABLE_SKIP] = ''
@@ -86,7 +88,10 @@ def main(prog, description=''):
         env_vars[ExeTestEnvVars.NUM_DIFFS] = args.num_diffs
 
         if args.rebase is not None:
-            env_vars[ExeTestEnvVars.REBASE] = args.rebase
+            items = args.rebase.split(":")
+            two_step_rebase = len(items) > 1
+            rebase_arg = f'{ExeTestEnvVars.REBASE}={items[0]} '
+
         if args.compare_only:
             env_vars[ExeTestEnvVars.COMPARE_ONLY] = ''
         if args.keep_output:
@@ -117,7 +122,7 @@ def main(prog, description=''):
                     num_cores = len(args.test_cases)
 
         if num_cores > 0:
-            assert args.rebase is None, "rebase operation cannot be parallelized"
+            assert args.rebase is None or two_step_rebase, "rebase operation cannot be parallelized"
             command += ['-n', str(num_cores)]
         else:
             if verbose or args.rebase is not None:
@@ -155,9 +160,26 @@ def main(prog, description=''):
             if ' ' in token:
                 token = f'"{token}"'
             command_tokens.append(token)
-        print('running:\n', ' '.join(command_tokens))
 
     command_str = ' '.join(command)
-    proc = subprocess.run(command_str, shell=True, text=True)
 
-    sys.exit(proc.returncode)
+    if rebase_arg is not None:
+        if two_step_rebase:
+            command_str_1 = f'{ExeTestEnvVars.KEEP_OUTPUT_ON_SUCCESS}=1 ' + command_str
+        else:
+            command_str_1 = rebase_arg + command_str
+    else:
+        command_str_1 = command_str
+
+    if verbose:
+        print('running:\n', command_str_1)
+    proc = subprocess.run(command_str_1, shell=True, text=True)
+    if proc.returncode != 0:
+        sys.exit(proc.returncode)
+
+    if two_step_rebase:
+        command_str_2 = rebase_arg + f'{ExeTestEnvVars.COMPARE_ONLY}=1 ' + command_str
+        if verbose:
+            print('running:\n', command_str_2)
+        proc = subprocess.run(command_str_2, shell=True, text=True)
+        sys.exit(proc.returncode)
