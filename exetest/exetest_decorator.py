@@ -11,6 +11,9 @@ from .env_vars import ExeTestEnvVars
 import pytest
 
 
+force_rebase = 'FORCE'
+
+
 def skip_test(reason=''):
     """
     A decorator for marking tests as skipped and still allowing to force-run them.
@@ -237,7 +240,7 @@ class ExeTestCaseDecorator:
             return False, False
 
         do_rebase = val != '0'
-        return do_rebase, do_rebase and val != 'FORCE'
+        return do_rebase, do_rebase and val != force_rebase
 
     def raise_exception(self, msg):
         raise Exception(msg)

@@ -3,8 +3,8 @@
 import subprocess
 import argparse
 import os
-import sys
 from exetest import ExeTestEnvVars
+import exetest
 
 
 def main(prog, description=''):
@@ -63,7 +63,7 @@ def main(prog, description=''):
     parser.add_argument("-j", "--num-cores",
                         help="number of CPUs used to run tests in parallel",
                         nargs='?',
-                        default=-1,
+                        default=None,
                         type=int)
 
     parser.add_argument("--no-skip", "--ns",
@@ -72,6 +72,30 @@ def main(prog, description=''):
 
     args, other_pytest_args = parser.parse_known_args()
 
+    # run two-step rebase :
+    # 1. distribute the tests
+    # 2. compare and prompt for rebase.
+    if args.rebase is not None and args.rebase != exetest.force_rebase and \
+        (len(args.test_cases) != 1 or \
+         (args.num_cores is not None and args.num_cores > 1)):
+        rebase_arg = args.rebase
+        args.keep_output = True
+        args.rebase = None
+        ret_code = process_args(args, other_pytest_args)
+        if ret_code != 0:
+            return ret_code
+
+        args.compare_only = True
+        args.keep_output = False
+        args.rebase = rebase_arg
+        args.num_cores = 1
+        return process_args(args, other_pytest_args)
+
+    else:
+        return process_args(args, other_pytest_args)
+
+
+def process_args(args, other_pytest_args):
     env_vars = {}
     command = ['pytest']
     verbose = False
@@ -106,18 +130,17 @@ def main(prog, description=''):
             env_vars[ExeTestEnvVars.NO_RUN] = args.norun
 
         num_cores = args.num_cores
-        if num_cores < 0 and args.norun is None:
-            if args.rebase is None:
-                if len(args.test_cases) == 0:
-                    # default number of cores for running all tests
-                    num_cores = 32
-                elif len(args.test_cases) > 1:
-                    # sensible default: set the number of workers to be the number of arguments
-                    # (although due to regex/filtering feature it might not match the actual number of tests to run)
-                    num_cores = len(args.test_cases)
+        if num_cores is None and args.norun is None:
+            if len(args.test_cases) == 0:
+                # default number of cores for running all tests
+                num_cores = 32
+            elif len(args.test_cases) > 1:
+                # sensible default: set the number of workers to be the number of arguments
+                # (although due to regex/filtering feature it might not match the actual number of tests to run)
+                num_cores = len(args.test_cases)
 
-        if num_cores > 0:
-            assert args.rebase is None, "rebase operation cannot be parallelized"
+        if num_cores is not None and num_cores > 1:
+            assert args.rebase is None or args.rebase == exetest.force_rebase, "rebase operation cannot be parallelized"
             command += ['-n', str(num_cores)]
         else:
             if verbose or args.rebase is not None:
@@ -135,7 +158,7 @@ def main(prog, description=''):
                         join_string = ' or '
                     else:
                         join_string = ' '
-                    command += ['-k', join_string.join(args.test_cases)]
+                    command += ['-k', '"' + join_string.join(args.test_cases) + '"']
                     break
 
             test_cases.append(test_case)
@@ -144,6 +167,11 @@ def main(prog, description=''):
 
     if other_pytest_args:
         command += other_pytest_args
+
+    return run_command(command=command, env_vars=env_vars, verbose=verbose)
+
+
+def run_command(command, env_vars, verbose=True):
 
     if env_vars:
         env_var_str = [f'{k}={v}' for k, v in env_vars.items()]
@@ -159,5 +187,4 @@ def main(prog, description=''):
 
     command_str = ' '.join(command)
     proc = subprocess.run(command_str, shell=True, text=True)
-
-    sys.exit(proc.returncode)
+    return proc.returncode
