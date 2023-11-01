@@ -398,9 +398,12 @@ class ExeTestCaseDecorator:
         filename = os.path.basename(filepath)
         if filename in self.comparators:
             return self.comparators[filename]
+
         file_ext = filename.rsplit('.', 1)[-1]
-        default_comparator = FileComparator(max_diff_in_log=self._num_lines_diff)
-        return self.comparators.get(file_ext, default_comparator)
+        if file_ext in self.comparators:
+            return self.comparators[file_ext]
+        # default file comparator
+        return FileComparator(max_diff_in_log=self._num_lines_diff)
 
     def diff_files(self, ref_file, new_file, throw=True):
 
