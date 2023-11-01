@@ -273,8 +273,16 @@ class ExeTestCaseDecorator:
                     file_dir = os.path.dirname(new_file)
 
                 if file_dir and not os.path.exists(file_dir):
+                    topmost_created_dir = file_dir
+                    while True:
+                        parent_dir = os.path.split(topmost_created_dir)[0]
+                        if not parent_dir or os.path.exists(parent_dir):
+                            break
+                        else:
+                            topmost_created_dir = parent_dir
+
                     os.makedirs(file_dir, exist_ok=True)
-                    created_dirs.append(file_dir)
+                    created_dirs.append(topmost_created_dir)
 
             tmp_output_dir = self.get_output_dir(test_name)
             run_from_dir = os.path.join(self.test_root, tmp_output_dir) \
