@@ -82,7 +82,8 @@ def main(prog, description=''):
         args.keep_output = True
         args.rebase = None
         ret_code = process_args(args, other_pytest_args)
-        if ret_code != 0:
+        has_diff = ret_code != 0
+        if not has_diff:
             return ret_code
 
         args.compare_only = True
