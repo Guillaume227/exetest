@@ -276,7 +276,7 @@ class ExeTestCaseDecorator:
                     topmost_created_dir = file_dir
                     while True:
                         parent_dir = os.path.split(topmost_created_dir)[0]
-                        if not parent_dir or os.path.exists(parent_dir):
+                        if not parent_dir or parent_dir == self.TMP_OUTPUT_DIR or os.path.exists(parent_dir):
                             break
                         else:
                             topmost_created_dir = parent_dir
