@@ -72,19 +72,22 @@ def main(prog, description=''):
 
     args, other_pytest_args = parser.parse_known_args()
 
-    # run two-step rebase :
-    # 1. distribute the tests
-    # 2. compare and prompt for rebase.
     if args.rebase is not None and args.rebase != exetest.force_rebase and \
-        (len(args.test_cases) != 1 or \
+        (len(args.test_cases) != 1 or\
          (args.num_cores is not None and args.num_cores > 1)):
+        # run two-step rebase:
+        # 1. distribute the tests
+        # 2. compare and prompt for rebase.
+
         rebase_arg = args.rebase
-        args.keep_output = True
-        args.rebase = None
-        ret_code = process_args(args, other_pytest_args)
-        has_diff = ret_code != 0
-        if not has_diff:
-            return ret_code
+
+        if not args.compare_only:
+            args.keep_output = True
+            args.rebase = None
+            ret_code = process_args(args, other_pytest_args)
+            has_diff = ret_code != 0
+            if not has_diff:
+                return ret_code
 
         args.compare_only = True
         args.keep_output = False
