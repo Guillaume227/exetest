@@ -351,12 +351,12 @@ class ExeTestCaseDecorator:
                     self.raise_exception(f"Missing output file: {new_file}")
 
         for ref_file, new_file in files_to_compare:
-            self.diff_files(ref_file, new_file)
+            self.compare_equal(ref_file, new_file)
 
     def run_rebase_compare(self, files_to_compare, force_rebase=False):
 
         failed_rebase_msg = ''
-        skip_rebase = False
+        incomplete_rebase = False
 
         for ref_file, new_file in files_to_compare:
 
@@ -372,10 +372,10 @@ class ExeTestCaseDecorator:
 
             if not os.path.exists(ref_file):
                 os.makedirs(os.path.dirname(ref_file), exist_ok=True)
-            elif self.diff_files(ref_file, new_file, throw=False):
+            elif self.compare_equal(ref_file, new_file, throw=False):
                 continue
 
-            print(f"rebasing test - about to update baseline: {new_file} -> {ref_file}")
+            print(f"rebasing test baseline: {new_file} -> {ref_file}")
             try:
                 if force_rebase or 'Y' == input("Are you sure? (Y/[n]) ").strip():
                     try:
@@ -391,13 +391,13 @@ class ExeTestCaseDecorator:
                     else:
                         print('rebase successful')
                 else:
-                    raise unittest.SkipTest(f"aborting rebase for {ref_file}")
+                    incomplete_rebase = True
             except KeyboardInterrupt:
-                skip_rebase = True
+                incomplete_rebase = True
                 break
 
-        if skip_rebase:
-            raise unittest.SkipTest('aborting rebase')
+        if incomplete_rebase:
+            raise unittest.SkipTest('incomplete rebase')
 
         if failed_rebase_msg:
             self.raise_exception(f'failed rebasing tests: {failed_rebase_msg}')
@@ -413,7 +413,7 @@ class ExeTestCaseDecorator:
         # default file comparator
         return FileComparator(max_diff_in_log=self._num_lines_diff)
 
-    def diff_files(self, ref_file, new_file, throw=True):
+    def compare_equal(self, ref_file, new_file, throw=True):
 
         compare_functors = self.get_file_comparator(ref_file)
 
