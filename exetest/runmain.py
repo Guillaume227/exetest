@@ -60,7 +60,7 @@ def main(prog, description=''):
                         default=25,
                         type=int)
 
-    parser.add_argument("-j", "--num-cores",
+    parser.add_argument("-n", "--num-cores",
                         help="number of CPUs used to run tests in parallel",
                         nargs='?',
                         default=None,
@@ -82,7 +82,6 @@ def main(prog, description=''):
         rebase_arg = args.rebase
 
         if not args.compare_only:
-            args.keep_output = True
             args.rebase = None
             ret_code = process_args(args, other_pytest_args)
             has_diff = ret_code != 0
@@ -90,9 +89,9 @@ def main(prog, description=''):
                 return ret_code
 
         args.compare_only = True
-        args.keep_output = False
         args.rebase = rebase_arg
         args.num_cores = 1
+        other_pytest_args.append('--last-failed')
         return process_args(args, other_pytest_args)
 
     else:
