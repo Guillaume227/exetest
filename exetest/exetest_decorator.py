@@ -379,11 +379,12 @@ class ExeTestCaseDecorator:
             try:
                 if force_rebase or 'Y' == input("Are you sure? (Y/[n]) ").strip():
                     try:
+                        # we want to copy symlinks as symlinks, not copy what they refer to
                         if os.path.isdir(new_file):
-                            shutil.copytree(new_file, ref_file)
+                            shutil.copytree(new_file, ref_file, symlinks=True)
                             #shutil.rmtree(new_file)
                         else:
-                            shutil.copy(new_file, ref_file)
+                            shutil.copy(new_file, ref_file, follow_symlinks=False)
                             #os.remove(new_file)
                     except PermissionError as err:
                         failed_rebase_msg += f'\ncp {new_file} {ref_file}'
