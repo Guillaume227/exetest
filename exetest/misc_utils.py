@@ -36,9 +36,9 @@ def prompt_user(message_prompt: str,
                 default: bool = None) -> bool:
     if default is not None:
         if default:
-            reply_usage = f'[{yes_entries}]/{no_entries[0]}'
+            reply_usage = f'[{yes_entries[0]}]/{no_entries[0]}'
         else:
-            reply_usage = f'{yes_entries}/[{no_entries[0]}]'
+            reply_usage = f'{yes_entries[0]}/[{no_entries[0]}]'
     else:
         reply_usage = f'{yes_entries[0]}/{no_entries[0]}'
 
