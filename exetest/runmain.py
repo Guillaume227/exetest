@@ -72,7 +72,7 @@ def main(prog, description=''):
 
     args, other_pytest_args = parser.parse_known_args()
 
-    if args.rebase is not None and args.rebase != exetest.force_rebase and \
+    if args.rebase is not None and args.rebase != exetest.FORCE_REBASE and \
         (len(args.test_cases) != 1 or\
          (args.num_cores is not None and args.num_cores > 1)):
         # run two-step rebase:
@@ -143,7 +143,7 @@ def process_args(args, other_pytest_args):
                 num_cores = len(args.test_cases)
 
         if num_cores is not None and num_cores > 1:
-            assert args.rebase is None or args.rebase == exetest.force_rebase, "rebase operation cannot be parallelized"
+            assert args.rebase is None or args.rebase == exetest.FORCE_REBASE, "rebase operation cannot be parallelized"
             command += ['-n', str(num_cores)]
         else:
             if verbose or args.rebase is not None:

@@ -1,5 +1,6 @@
 import os
 import os.path
+import pathlib
 from . import misc_utils
 from .misc_utils import working_dir, rmdir
 from .diff_utils import FileComparator
@@ -11,7 +12,8 @@ from .env_vars import ExeTestEnvVars
 import pytest
 
 
-force_rebase = 'FORCE'
+FORCE_REBASE = 'FORCE'
+REBASE_YES_DEFAULT = 'y'
 
 
 def skip_test(reason=''):
@@ -38,19 +40,20 @@ class ExeTestCaseDecorator:
     """
 
     def __init__(self,
-                 exe,
-                 test_root='.',  # =os.path.dirname(__file__),
-                 ref_dir='ref_dir',
-                 out_dir='out_dir',
+                 exe: str,
+                 test_root: str = '.',  # =os.path.dirname(__file__),
+                 ref_dir: str = 'ref_dir',
+                 out_dir: str = 'out_dir',
                  exe_args=None,
                  compare_spec=None,
-                 run_from_out_dir=True,
-                 test_name_as_dir=True,
-                 nested_ref_dir=True,
-                 nested_out_dir=False,
+                 run_from_out_dir: bool = True,
+                 test_name_as_dir: bool = True,
+                 nested_ref_dir: bool = True,
+                 nested_out_dir: bool = False, 
                  comparators=None,
+                 ref_diff_only: bool = False,
                  exception_handler=None,
-                 keep_output_on_success=False,
+                 keep_output_on_success: bool = False,
                  env_vars=None,
                  pre_cmd=None,
                  exe_path_ref=None,
@@ -67,6 +70,7 @@ class ExeTestCaseDecorator:
         :param nested_ref_dir: whether ref_dir should be nested in the test_name directory (otherwise, test_name is nested under ref_dir)
         :param nested_out_dir: whether out_dir should be nested in the test_name directory (otherwise, test_name is nested under out_dir)
         :param comparators:
+        :param ref_diff_only: files in out_dir but not in ref_dir will not be flagged
         :param exception_handler: what to do in case of exception
         :param env_vars: environment variables to populate for the test run
         :param pre_cmd: a command to run before the executable is run
@@ -100,6 +104,7 @@ class ExeTestCaseDecorator:
         self.TMP_OUTPUT_DIR = out_dir
         self.test_name_as_dir = test_name_as_dir
         self.run_from_out_dir = run_from_out_dir
+        self.ref_diff_only = ref_diff_only
 
         self.test_name = ''
         self.comparators = comparators if comparators is not None else {}
@@ -127,7 +132,7 @@ class ExeTestCaseDecorator:
     def get_test_subdir(test_name):
         return test_name
 
-    def get_output_dir(self, test_name):
+    def get_out_dir(self, test_name):
         return self.make_dir_path(self.TMP_OUTPUT_DIR, test_name, self._nested_out_dir)
 
     def get_ref_dir(self, test_name):
@@ -237,10 +242,10 @@ class ExeTestCaseDecorator:
         """
         val = os.getenv(ExeTestEnvVars.REBASE)
         if val is None:
-            return False, False
+            return False, False, False
 
         do_rebase = val != '0'
-        return do_rebase, do_rebase and val != force_rebase
+        return do_rebase, do_rebase and val != FORCE_REBASE, val == REBASE_YES_DEFAULT
 
     def raise_exception(self, msg):
         raise Exception(msg)
@@ -250,7 +255,7 @@ class ExeTestCaseDecorator:
                  test_name, parent_module_name,
                  verbose):
 
-        do_rebase, rebase_with_prompt = self.do_test_rebase()
+        do_rebase, rebase_with_prompt, rebase_yes_default = self.do_test_rebase()
         if rebase_with_prompt:
             if not sys.stdout.isatty():
                 self.raise_exception("cannot rebase unless confirmation "
@@ -261,11 +266,11 @@ class ExeTestCaseDecorator:
 
             files_to_compare = self.get_files_to_compare(test_name, compare_spec)
 
-            if compare_spec and not files_to_compare:
+            if compare_spec and not files_to_compare.items():
                 self.raise_exception(f"No reference output files for {compare_spec}")
 
             created_dirs = []
-            for ref_file, new_file in files_to_compare:
+            for ref_file, new_file in files_to_compare.items():
 
                 if os.path.isdir(ref_file):
                     file_dir = new_file
@@ -284,7 +289,7 @@ class ExeTestCaseDecorator:
                     os.makedirs(file_dir, exist_ok=True)
                     created_dirs.append(topmost_created_dir)
 
-            tmp_output_dir = self.get_output_dir(test_name)
+            tmp_output_dir = self.get_out_dir(test_name)
             run_from_dir = os.path.join(self.test_root, tmp_output_dir) \
                 if self.run_from_out_dir else self.test_root
 
@@ -324,7 +329,8 @@ class ExeTestCaseDecorator:
 
             if do_rebase:
                 self.run_rebase_compare(files_to_compare,
-                                        force_rebase=not rebase_with_prompt)
+                                        force_rebase=not rebase_with_prompt,
+                                        rebase_prompt_default=rebase_yes_default)
             else:
                 self.run_compare(files_to_compare)
 
@@ -334,11 +340,11 @@ class ExeTestCaseDecorator:
 
     def run_compare(self, files_to_compare):
 
-        for _ref_file, new_file in files_to_compare:
+        for _ref_file, new_file in files_to_compare.items():
             if not os.path.exists(new_file):
                 self.raise_exception(f"Missing output file: {new_file}")
 
-        for ref_file, new_file in files_to_compare:
+        for ref_file, new_file in files_to_compare.items():
             has_ref = os.path.exists(ref_file)
             has_new = os.path.exists(new_file)
             if not has_ref and not has_new:
@@ -350,19 +356,24 @@ class ExeTestCaseDecorator:
                 if not has_new:
                     self.raise_exception(f"Missing output file: {new_file}")
 
-        for ref_file, new_file in files_to_compare:
+        for ref_file, new_file in files_to_compare.items():
             self.compare_equal(ref_file, new_file)
 
-    def run_rebase_compare(self, files_to_compare, force_rebase=False):
+    def run_rebase_compare(self,
+                           files_to_compare,
+                           force_rebase: bool = False,
+                           rebase_prompt_default: bool = False):
 
         failed_rebase_msg = ''
         incomplete_rebase = False
 
-        for ref_file, new_file in files_to_compare:
+        for ref_file, new_file in files_to_compare.items():
 
             if not os.path.exists(new_file) and os.path.exists(ref_file):
+                print()
                 print(f'{new_file} does not exist')
-                if force_rebase or 'Y' == input("Remove it from reference output? (Y/[n]").strip():
+                if force_rebase or misc_utils.prompt_user("Remove it from reference output?",
+                                                          default=rebase_prompt_default):
                     if os.path.isdir(ref_file):
                         shutil.rmtree(ref_file)
                     else:
@@ -375,9 +386,11 @@ class ExeTestCaseDecorator:
             elif self.compare_equal(ref_file, new_file, throw=False):
                 continue
 
-            print(f"rebasing test baseline: {new_file} -> {ref_file}")
+            print()
+            print(f"rebasing test baseline:\n  {new_file} ->\n  {ref_file}")
             try:
-                if force_rebase or 'Y' == input("Are you sure? (Y/[n]) ").strip():
+                if force_rebase or misc_utils.prompt_user("Are you sure?",
+                                                          default=rebase_prompt_default):
                     try:
                         # we want to copy symlinks as symlinks, not copy what they refer to
                         if os.path.isdir(new_file):
@@ -460,7 +473,7 @@ class ExeTestCaseDecorator:
         else:
             return dir_stem
 
-    def get_files_to_compare(self, test_name, compare_spec=None):
+    def get_files_to_compare(self, test_name, compare_spec=None) -> dict:
         """
         :param test_name: name of the test, used to deduce the ref dir path.
         :param compare_spec: specifies output files to compare; either:
@@ -472,13 +485,12 @@ class ExeTestCaseDecorator:
         """
 
         ref_dir = self.get_ref_dir(test_name)
+        out_dir = self.get_out_dir(test_name)
 
         if compare_spec is None:
             compare_spec = ref_dir
-
-            if not os.path.exists(compare_spec):
-                out_dir = self.get_output_dir(test_name)
-                return [(ref_dir, out_dir)]
+            if not os.path.exists(ref_dir):
+                return {ref_dir: out_dir}
 
         elif not compare_spec:
             return []
@@ -487,20 +499,18 @@ class ExeTestCaseDecorator:
             # single reference file
             compare_spec = [compare_spec]
 
-        files_to_compare = []
+        files_to_compare = {}
 
         for ref_path in compare_spec:
 
             if isinstance(ref_path, tuple):
                 file1, file2 = ref_path
-                out_dir = self.get_output_dir(test_name)
-                files_to_compare.append((os.path.join(ref_dir, file1),
-                                         os.path.join(out_dir, file2)))
+                files_to_compare[os.path.join(ref_dir, file1)] = os.path.join(out_dir, file2)
                 continue
             elif isinstance(compare_spec, dict):
                 new_path = compare_spec[ref_path]
             else:
-                new_path = self.get_output_dir(test_name)
+                new_path = out_dir
 
             if os.path.isdir(ref_path):
                 # add all files under ref directory
@@ -509,17 +519,37 @@ class ExeTestCaseDecorator:
 
                 for dirpath, dirnames, filenames in os.walk(ref_path):
                     tmp_path = dirpath.replace(ref_path, new_path, 1)
-
                     for filename in filenames:
-                        files_to_compare.append((os.path.join(dirpath, filename),
-                                                 os.path.join(tmp_path, filename)))
+                        files_to_compare[os.path.join(dirpath, filename)] = os.path.join(tmp_path, filename)
+
+                for dirpath, dirnames, filenames in os.walk(new_path):
+                    tmp_path = dirpath.replace(new_path, ref_path, 1)
+                    for filename in filenames:
+                        files_to_compare[os.path.join(tmp_path, filename)] = os.path.join(dirpath, filename)
 
             else:
                 if not os.path.exists(ref_path):
                     ref_path = os.path.join(ref_dir, ref_path)
 
                 # self.raise_exception(ref_path.replace(ref_dir, new_path))
-                files_to_compare.append((ref_path, ref_path.replace(ref_dir, new_path)))
+                files_to_compare[ref_path] = ref_path.replace(ref_dir, new_path)
+
+        patterns_to_ignore = []
+        for key, value in self.comparators.items():
+            if value is None:
+                patterns_to_ignore.append(key)
+
+        excluded_files = []
+        for file in files_to_compare:
+            file_path = pathlib.PurePath(file)
+            for pattern in patterns_to_ignore:
+                if file_path.match(pattern):
+                    if self.verbose:
+                        print(f'ignoring {file} based on {patterns_to_ignore} pattern')
+                    excluded_files.append(file)
+
+        for file in excluded_files:
+            files_to_compare.pop(file)
 
         return files_to_compare
 

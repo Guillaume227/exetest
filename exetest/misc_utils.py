@@ -30,6 +30,32 @@ def working_dir(path):
             os.chdir(current_dir)
 
 
+def prompt_user(message_prompt: str,
+                yes_entries=('y',),
+                no_entries=('n',),
+                default: bool = None) -> bool:
+    if default is not None:
+        if default:
+            reply_usage = f'[{yes_entries}]/{no_entries[0]}'
+        else:
+            reply_usage = f'{yes_entries}/[{no_entries[0]}]'
+    else:
+        reply_usage = f'{yes_entries[0]}/{no_entries[0]}'
+
+    message_prompt += ' ' + reply_usage + '\n'
+
+    while True:
+        user_input = input(message_prompt)
+        if user_input == '' and default is not None:
+            return default
+        if user_input in yes_entries:
+            return True
+        if user_input in no_entries:
+            return False
+
+        print(f'Invalid choice: {user_input}')
+
+
 @contextmanager
 def revert_file_modif(file_path):
     """ Saves file content and  write original content back on exit.
