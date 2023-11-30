@@ -522,10 +522,11 @@ class ExeTestCaseDecorator:
                     for filename in filenames:
                         files_to_compare[os.path.join(dirpath, filename)] = os.path.join(tmp_path, filename)
 
-                for dirpath, dirnames, filenames in os.walk(new_path):
-                    tmp_path = dirpath.replace(new_path, ref_path, 1)
-                    for filename in filenames:
-                        files_to_compare[os.path.join(tmp_path, filename)] = os.path.join(dirpath, filename)
+                if not self.ref_diff_only:
+                    for dirpath, dirnames, filenames in os.walk(new_path):
+                        tmp_path = dirpath.replace(new_path, ref_path, 1)
+                        for filename in filenames:
+                            files_to_compare[os.path.join(tmp_path, filename)] = os.path.join(dirpath, filename)
 
             else:
                 if not os.path.exists(ref_path):
@@ -545,7 +546,7 @@ class ExeTestCaseDecorator:
             for pattern in patterns_to_ignore:
                 if file_path.match(pattern):
                     if self.verbose:
-                        print(f'ignoring {file} based on {patterns_to_ignore} pattern')
+                        print(f'ignoring {file} based on {pattern} pattern')
                     excluded_files.append(file)
 
         for file in excluded_files:
