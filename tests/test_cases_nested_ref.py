@@ -27,7 +27,7 @@ def test_dd():
 
 
 def validate_message(message):
-    return 'files differ' in message
+    return 'differences found' in message
 
 
 @expects_exception(expected_message_validator=validate_message)

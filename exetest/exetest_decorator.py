@@ -193,7 +193,7 @@ class ExeTestCaseDecorator:
 
             resolved_env_vars = {}
             for name, value in all_env_vars.items():
-                resolved_env_vars[name] = value.format(test_name=test_name)
+                resolved_env_vars[name] = str(value).format(test_name=test_name)
 
             @wraps(test_func)
             def f(*args, **kwargs):
@@ -356,8 +356,12 @@ class ExeTestCaseDecorator:
                 if not has_new:
                     self.raise_exception(f"Missing output file: {new_file}")
 
+        num_diffs = 0
         for ref_file, new_file in files_to_compare.items():
-            self.compare_equal(ref_file, new_file)
+            if not self.compare_equal(ref_file, new_file, throw=False):
+                num_diffs += 1
+
+        assert num_diffs == 0, f"{num_diffs} differences found"
 
     def run_rebase_compare(self,
                            files_to_compare,
@@ -381,13 +385,17 @@ class ExeTestCaseDecorator:
                     print(f'removed {new_file} from reference output')
                 continue
 
-            if not os.path.exists(ref_file):
+            ref_file_is_present = os.path.exists(ref_file)
+            if not ref_file_is_present:
                 os.makedirs(os.path.dirname(ref_file), exist_ok=True)
             elif self.compare_equal(ref_file, new_file, throw=False):
                 continue
 
             print()
-            print(f"rebasing test baseline:\n  {new_file} ->\n  {ref_file}")
+            if ref_file_is_present:
+                print(f"rebasing test baseline:\n {new_file} ->\n {ref_file}")
+            else:
+                print(f"creating test baseline:\n  {new_file} ->\n  {ref_file}")
             try:
                 if force_rebase or misc_utils.prompt_user("Are you sure?",
                                                           default=rebase_prompt_default):
@@ -421,9 +429,10 @@ class ExeTestCaseDecorator:
         if filename in self.comparators:
             return self.comparators[filename]
 
-        file_ext = filename.rsplit('.', 1)[-1]
-        if file_ext in self.comparators:
-            return self.comparators[file_ext]
+        for pattern, comparator in self.comparators.items():
+            if pathlib.PurePath(filename).match(pattern):
+                return comparator
+
         # default file comparator
         return FileComparator(max_diff_in_log=self._num_lines_diff)
 
@@ -447,22 +456,31 @@ class ExeTestCaseDecorator:
         if self.verbose:
             print()
 
+        all_equal = True
         for compare_functor in compare_functors:
             comparison_description = compare_functor.description()
             if comparison_description:
                 comparison_description = f' ({comparison_description})'
-            if compare_functor(ref_file, new_file):
+            try:
+                compare_equal = compare_functor(ref_file, new_file)
+            except Exception as exc:
+                all_equal = False
+                print(f'failed comparing files: {files_info}')
+                print('error:', exc)
+                continue
+
+            if compare_equal:
                 if self.verbose:
                     print(f'files match{comparison_description}: {files_info}')
             else:
+                all_equal = False
                 error_msg = f'files differ{comparison_description}: {files_info}'
                 if self.verbose:
                     print(error_msg)
                 if throw:
                     self.raise_exception(error_msg)
-                else:
-                    return False
-        return True
+
+        return all_equal
 
     def make_dir_path(self, dir_stem, test_name, nested_dir):
         if self.test_name_as_dir:
