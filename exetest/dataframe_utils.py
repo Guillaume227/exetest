@@ -51,7 +51,9 @@ class DFComparator:
     def __call__(self, df_path1, df_path2) -> bool:
         df1 = load_df(file_path=df_path1, ignore_cols=self.ignore_cols, filter_cols=self.filter_cols)
         df2 = load_df(file_path=df_path2, ignore_cols=self.ignore_cols, filter_cols=self.filter_cols)
+        return self.compare_dataframes(df1, df2)
 
+    def compare_dataframes(self, df1, df2):
         if not df1.equals(df2):
 
             shape_differs = df1.shape != df2.shape
