@@ -3,11 +3,14 @@ import pandas as pd
 import functools
 
 
-def load_df(file_path, ignore_cols=None):
+def load_df(file_path, ignore_cols=None, filter_cols=None):
     if file_path.endswith('.csv'):
         df = pd.read_csv(file_path)
     else:
         df = pd.read_feather(file_path)
+
+    if filter_cols:
+        df = df[filter_cols]
 
     if ignore_cols:
         return df.loc[:, ~df.columns.isin(ignore_cols)]
@@ -21,7 +24,12 @@ def is_close(a, b, **kwargs):
 
 class DFComparator:
 
-    def __init__(self, ignore_cols=None, verbose: bool = True, num_diffs: int=10, **np_close_kwargs):
+    def __init__(self,
+                 ignore_cols=None,
+                 filter_cols=None,
+                 verbose: bool = True,
+                 num_diffs: int=10,
+                 **np_close_kwargs):
         """
         :param ignore_cols: columns to ignore during comparison
         :param verbose:
@@ -29,6 +37,7 @@ class DFComparator:
         :param np_close_kwargs: np.allclose() kwargs to specify tolerance
         """
         self.ignore_cols = ignore_cols or []
+        self.filter_cols = filter_cols or []
         self.verbose = verbose
         self.np_close_kwargs = np_close_kwargs
         self.num_diffs = num_diffs
@@ -40,8 +49,8 @@ class DFComparator:
             return ''
 
     def __call__(self, df_path1, df_path2) -> bool:
-        df1 = load_df(file_path=df_path1, ignore_cols=self.ignore_cols)
-        df2 = load_df(file_path=df_path2, ignore_cols=self.ignore_cols)
+        df1 = load_df(file_path=df_path1, ignore_cols=self.ignore_cols, filter_cols=self.filter_cols)
+        df2 = load_df(file_path=df_path2, ignore_cols=self.ignore_cols, filter_cols=self.filter_cols)
 
         if not df1.equals(df2):
 
