@@ -157,7 +157,7 @@ def process_args(args, other_pytest_args):
         for test_case in args.test_cases:
             if not os.path.exists(test_case):
                 if '::' not in test_case:
-                    if 'or' not in args.test_cases:
+                    if 'or' not in args.test_cases and 'not' not in args.test_cases:
                         join_string = ' or '
                     else:
                         join_string = ' '
