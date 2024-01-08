@@ -433,7 +433,7 @@ class ExeTestCaseDecorator:
             if pathlib.PurePath(filename).match(pattern):
                 return comparator
 
-        if os.path.is_dir(filepath):
+        if os.path.isdir(filepath):
             return diff_dirs
         # default file comparator
         return FileComparator(max_diff_in_log=self._num_lines_diff)
