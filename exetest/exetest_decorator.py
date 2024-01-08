@@ -3,7 +3,7 @@ import os.path
 import pathlib
 from . import misc_utils
 from .misc_utils import working_dir, rmdir
-from .diff_utils import FileComparator
+from .diff_utils import FileComparator, diff_dirs
 from functools import wraps
 import shutil
 import sys
@@ -433,6 +433,8 @@ class ExeTestCaseDecorator:
             if pathlib.PurePath(filename).match(pattern):
                 return comparator
 
+        if os.path.is_dir(filepath):
+            return diff_dirs
         # default file comparator
         return FileComparator(max_diff_in_log=self._num_lines_diff)
 
