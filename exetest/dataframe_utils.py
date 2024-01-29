@@ -91,12 +91,32 @@ class DFComparator:
                 if self.verbose:
                     print('====================================')
                     print(f'Showing first {self.num_diffs} in cols with diff {cols_with_diffs}:')
-                    df1_with_diff = df1[cols_with_diffs]
-                    df2_with_diff = df2[cols_with_diffs]
-                    diff_mask = ~(df1_with_diff - df2_with_diff).apply(
-                        functools.partial(is_close, b=0, **self.np_close_kwargs))
-                    print(pd.concat([df1_with_diff[diff_mask], df2_with_diff[diff_mask]], axis=1).head(self.num_diffs))
+                    numerical_diff_cols =[]
+                    non_numerical_diff_cols = []
+                    for col in cols_with_diffs:
+                        if np.issubdtype(df1[col].dtype, np.number):
+                            numerical_diff_cols.append(col)
+                        else:
+                            non_numerical_diff_cols.append(col)
 
+                    if numerical_diff_cols:
+                        print('numerical diffs:')
+                        df1_with_diff = df1[numerical_diff_cols]
+                        df2_with_diff = df2[numerical_diff_cols]
+                        diff_mask = ~(df1_with_diff - df2_with_diff).apply(
+                            functools.partial(is_close, b=0, **self.np_close_kwargs))
+                        print(pd.concat([df1_with_diff[diff_mask],
+                                         df2_with_diff[diff_mask]
+                                         ], axis=1).head(self.num_diffs))
+
+                    if non_numerical_diff_cols:
+                        print('non numerical diffs:')
+                        df1_with_diff = df1[non_numerical_diff_cols]
+                        df2_with_diff = df2[non_numerical_diff_cols]
+                        diff_mask = df1_with_diff != df2_with_diff
+                        print(pd.concat([df1_with_diff[diff_mask],
+                                         df2_with_diff[diff_mask]
+                                         ], axis=1).head(self.num_diffs))
                 return False
 
         return True
