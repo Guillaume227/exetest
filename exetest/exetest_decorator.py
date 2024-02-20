@@ -1,6 +1,7 @@
 import os
 import os.path
 import pathlib
+import traceback
 from . import misc_utils
 from .misc_utils import working_dir, rmdir
 from .diff_utils import FileComparator, diff_dirs
@@ -107,7 +108,7 @@ class ExeTestCaseDecorator:
         self.ref_diff_only = ref_diff_only
 
         self.test_name = ''
-        self.comparators = comparators if comparators is not None else {}
+        self.comparators = comparators or {}
         self.exception_handler = exception_handler
         self.common_env_vars = env_vars or dict()
         self.pre_cmd = pre_cmd if pre_cmd else []
@@ -127,6 +128,7 @@ class ExeTestCaseDecorator:
         self._nested_out_dir = nested_out_dir
         self._keep_output_on_success = True if ExeTestEnvVars.KEEP_OUTPUT_ON_SUCCESS in os.environ else keep_output_on_success
         self._num_lines_diff = int(os.environ.get(ExeTestEnvVars.NUM_DIFFS, 20))
+        self._file_filter = os.environ.get(ExeTestEnvVars.FILE_FILTER, '').split('+')
 
     @staticmethod
     def get_test_subdir(test_name):
@@ -269,32 +271,15 @@ class ExeTestCaseDecorator:
             if compare_spec and not files_to_compare.items():
                 self.raise_exception(f"No reference output files for {compare_spec}")
 
-            created_dirs = []
-            for ref_file, new_file in files_to_compare.items():
-
-                if os.path.isdir(ref_file):
-                    file_dir = new_file
-                else:
-                    file_dir = os.path.dirname(new_file)
-
-                if file_dir and not os.path.exists(file_dir):
-                    topmost_created_dir = file_dir
-                    while True:
-                        parent_dir = os.path.split(topmost_created_dir)[0]
-                        if not parent_dir or parent_dir == self.TMP_OUTPUT_DIR or os.path.exists(parent_dir):
-                            break
-                        else:
-                            topmost_created_dir = parent_dir
-
-                    os.makedirs(file_dir, exist_ok=True)
-                    created_dirs.append(topmost_created_dir)
-
             tmp_output_dir = self.get_out_dir(test_name)
             run_from_dir = os.path.join(self.test_root, tmp_output_dir) \
                 if self.run_from_out_dir else self.test_root
 
         if not self._compare_only:
             self.clear_dir(tmp_output_dir, recreate=True)
+
+        created_dirs = []
+        os.makedirs(tmp_output_dir, exist_ok=True)
 
         with working_dir(run_from_dir):
             try:
@@ -354,6 +339,8 @@ class ExeTestCaseDecorator:
                     self.raise_exception(f"Missing reference file: {ref_file} - "
                                          f"you can rebase with --rebase option")
                 if not has_new:
+                    while not os.path.exists(os.path.dirname(new_file)):
+                        new_file = os.path.dirname(new_file)
                     self.raise_exception(f"Missing output file: {new_file}")
 
         num_diffs = 0
@@ -473,7 +460,7 @@ class ExeTestCaseDecorator:
 
             if compare_equal:
                 if self.verbose:
-                    print(f'files match{comparison_description}: {files_info}')
+                    print(f'files match{comparison_description}: {ref_file}')
             else:
                 all_equal = False
                 error_msg = f'files differ{comparison_description}: {files_info}'
@@ -513,7 +500,7 @@ class ExeTestCaseDecorator:
                 return {ref_dir: out_dir}
 
         elif not compare_spec:
-            return []
+            return {}
 
         if isinstance(compare_spec, str):
             # single reference file
@@ -537,10 +524,12 @@ class ExeTestCaseDecorator:
                 ref_path = os.path.normpath(ref_path)
                 new_path = os.path.normpath(new_path)
 
-                for dirpath, dirnames, filenames in os.walk(ref_path):
+                for dirpath, dirnames, filenames in os.walk(ref_path, followlinks=True):
                     tmp_path = dirpath.replace(ref_path, new_path, 1)
                     for filename in filenames:
-                        files_to_compare[os.path.join(dirpath, filename)] = os.path.join(tmp_path, filename)
+                        ref_filepath = os.path.join(dirpath, filename)
+                        new_filepath = os.path.join(tmp_path, filename)
+                        files_to_compare[ref_filepath] = new_filepath
 
                 if not self.ref_diff_only:
                     for dirpath, dirnames, filenames in os.walk(new_path):
@@ -555,12 +544,17 @@ class ExeTestCaseDecorator:
                 # self.raise_exception(ref_path.replace(ref_dir, new_path))
                 files_to_compare[ref_path] = ref_path.replace(ref_dir, new_path)
 
+        excluded_files = []
+        if self._file_filter:
+            for file in files_to_compare:
+                if not misc_utils.pattern_matches(pattern=self._file_filter, path_string=file):
+                    excluded_files.append(file)
+
         patterns_to_ignore = []
         for key, value in self.comparators.items():
             if value is None:
                 patterns_to_ignore.append(key)
 
-        excluded_files = []
         for file in files_to_compare:
             file_path = pathlib.PurePath(file)
             for pattern in patterns_to_ignore:

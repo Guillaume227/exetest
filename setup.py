@@ -2,7 +2,7 @@ from distutils.core import setup
 setup(
   name='exetest',         # How you named your package folder (MyLib)
   packages=['exetest'],   # Chose the same as "name"
-  version='0.8.7',      # Start with a small number and increase it with every change you make
+  version='0.9.0',      # Start with a small number and increase it with every change you make
   license='MIT',        # Chose a license from here: https://help.github.com/articles/licensing-a-repository
   description='A pytest-based test framework for black-box approach to testing executables',   # Give a short description about your library
   author='Guillaume227',                   # Type in your name
@@ -18,7 +18,7 @@ setup(
     'Topic :: Software Development :: Build Tools',
     'Operating System :: OS Independent',
     'License :: OSI Approved :: MIT License',   # Again, pick a license
-    'Programming Language :: Python :: 3',      #Specify which pyhton versions that you want to support
+    'Programming Language :: Python :: 3',      #Specify the python versions that you want to support
   ],
   python_requires='>=3.6'
 )

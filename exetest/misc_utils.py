@@ -4,6 +4,8 @@ import shutil
 import time
 from contextlib import contextmanager
 import subprocess
+import typing
+import pathlib
 
 
 def print_test_meta(*message):
@@ -157,6 +159,7 @@ def exec_cmdline(command, args_list, check_ret_code=True,
     :param pre_cmd:
     :param post_cmd:
     :param verbose:
+    :param norun:
     :return:
     """
 
@@ -221,3 +224,39 @@ def exec_cmdline(command, args_list, check_ret_code=True,
             raise
 
     return cmd_line
+
+
+def pattern_matches(pattern: typing.Union[str, typing.List[str]],
+                    path_string: str) -> bool:
+
+    if isinstance(pattern, str):
+        patterns = [pattern]
+    else:
+        patterns = pattern
+
+    has_suppress = False
+    has_keep = False
+    keep = None
+
+    def match(pattern, string):
+        if '*' in pattern:
+            return pathlib.PurePath(string).match(pattern)
+        else:
+            return pattern in string
+
+    for pattern in patterns:
+        if pattern.startswith('~'):
+            has_suppress = True
+            if match(pattern=pattern[1:], string=path_string):
+                keep = False
+
+        else:
+            has_keep = True
+            if match(pattern=pattern, string=path_string):
+                keep = True
+
+    if keep is None:
+        # default
+        keep = has_suppress and not has_keep
+
+    return keep

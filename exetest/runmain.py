@@ -26,6 +26,10 @@ def main(prog, description=''):
                         const='',
                         type=str)
 
+    parser.add_argument("-f", "--file-filter",
+                        help="filter files to rebase / compare",
+                        nargs="+")
+
     parser.add_argument("--verbose",
                         help="verbose flag",
                         action='store_true')
@@ -118,6 +122,8 @@ def process_args(args, other_pytest_args):
             env_vars[ExeTestEnvVars.COMPARE_ONLY] = ''
         if args.keep_output:
             env_vars[ExeTestEnvVars.KEEP_OUTPUT_ON_SUCCESS] = ''
+        if args.file_filter:
+            env_vars[ExeTestEnvVars.FILE_FILTER] = '+'.join(args.file_filter)
 
         command += ['-v']
         verbose = len(args.test_cases) > 0 or args.verbose
