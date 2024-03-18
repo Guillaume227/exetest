@@ -79,7 +79,8 @@ class DFComparator:
 
             cols_with_diffs = []
             for col in df1.columns:
-                if df1[col].dtype != 'category' and np.issubdtype(df1[col].dtype, np.number):
+                if df1[col].dtype != 'category' and np.issubdtype(df1[col].dtype, np.number) \
+                                                and np.issubdtype(df2[col].dtype, np.number):
                     # use numerical comparison
                     if not np.allclose(df1[col].values, df2[col].values, **self.np_close_kwargs):
                         cols_with_diffs.append(col)
@@ -91,10 +92,11 @@ class DFComparator:
                 if self.verbose:
                     print('====================================')
                     print(f'Showing first {self.num_diffs} in cols with diff {cols_with_diffs}:')
-                    numerical_diff_cols =[]
+                    numerical_diff_cols = []
                     non_numerical_diff_cols = []
                     for col in cols_with_diffs:
-                        if np.issubdtype(df1[col].dtype, np.number):
+                        if np.issubdtype(df1[col].dtype, np.number) and \
+                           np.issubdtype(df2[col].dtype, np.number):
                             numerical_diff_cols.append(col)
                         else:
                             non_numerical_diff_cols.append(col)
