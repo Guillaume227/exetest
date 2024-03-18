@@ -54,7 +54,6 @@ class ExeTestCaseDecorator:
                  comparators=None,
                  ref_diff_only: bool = False,
                  exception_handler=None,
-                 keep_output_on_success: bool = False,
                  env_vars=None,
                  pre_cmd=None,
                  exe_path_ref=None,
@@ -126,7 +125,6 @@ class ExeTestCaseDecorator:
         self._compare_spec = compare_spec
         self._nested_ref_dir = nested_ref_dir
         self._nested_out_dir = nested_out_dir
-        self._keep_output_on_success = True if ExeTestEnvVars.KEEP_OUTPUT_ON_SUCCESS in os.environ else keep_output_on_success
         self._num_lines_diff = int(os.environ.get(ExeTestEnvVars.NUM_DIFFS, 20))
         self._file_filter = os.environ.get(ExeTestEnvVars.FILE_FILTER, '').split('+')
 
@@ -278,9 +276,6 @@ class ExeTestCaseDecorator:
         if not self._compare_only:
             self.clear_dir(tmp_output_dir, recreate=True)
 
-        created_dirs = []
-        os.makedirs(tmp_output_dir, exist_ok=True)
-
         with working_dir(run_from_dir):
             try:
                 misc_utils.exec_cmdline(self.exe_path,
@@ -318,10 +313,6 @@ class ExeTestCaseDecorator:
                                         rebase_prompt_default=rebase_yes_default)
             else:
                 self.run_compare(files_to_compare)
-
-            if not self._keep_output_on_success:
-                for file_dir in created_dirs:
-                    rmdir(file_dir)
 
     def run_compare(self, files_to_compare):
 

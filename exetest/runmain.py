@@ -120,8 +120,6 @@ def process_args(args, other_pytest_args):
             env_vars[ExeTestEnvVars.REBASE] = args.rebase
         if args.compare_only:
             env_vars[ExeTestEnvVars.COMPARE_ONLY] = ''
-        if args.keep_output:
-            env_vars[ExeTestEnvVars.KEEP_OUTPUT_ON_SUCCESS] = ''
         if args.file_filter:
             env_vars[ExeTestEnvVars.FILE_FILTER] = '+'.join(args.file_filter)
 
