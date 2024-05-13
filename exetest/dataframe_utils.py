@@ -28,7 +28,7 @@ class DFComparator:
                  ignore_cols=None,
                  filter_cols=None,
                  verbose: bool = True,
-                 num_diffs: int=10,
+                 num_diffs: int = 10,
                  **np_close_kwargs):
         """
         :param ignore_cols: columns to ignore during comparison
@@ -40,7 +40,7 @@ class DFComparator:
         self.filter_cols = filter_cols or []
         self.verbose = verbose
         self.np_close_kwargs = np_close_kwargs
-        self.num_diffs = num_diffs
+        self.num_diffs_to_display = num_diffs
 
     def description(self) -> str:
         if self.ignore_cols:
@@ -77,6 +77,10 @@ class DFComparator:
             if shape_differs or columns_differ:
                 return False
 
+            # exclude NaNs from comparison by replacing them with 0
+            df1 = df1.fillna(0)
+            df2 = df2.fillna(0)
+
             cols_with_diffs = []
             for col in df1.columns:
                 if df1[col].dtype != 'category' and np.issubdtype(df1[col].dtype, np.number) \
@@ -91,7 +95,7 @@ class DFComparator:
             if cols_with_diffs:
                 if self.verbose:
                     print('====================================')
-                    print(f'Showing first {self.num_diffs} in cols with diff {cols_with_diffs}:')
+                    print(f'Showing first {self.num_diffs_to_display} in cols with diff {cols_with_diffs}:')
                     numerical_diff_cols = []
                     non_numerical_diff_cols = []
                     for col in cols_with_diffs:
@@ -102,23 +106,56 @@ class DFComparator:
                             non_numerical_diff_cols.append(col)
 
                     if numerical_diff_cols:
-                        print('numerical diffs:')
-                        df1_with_diff = df1[numerical_diff_cols]
-                        df2_with_diff = df2[numerical_diff_cols]
-                        diff_mask = ~(df1_with_diff - df2_with_diff).apply(
-                            functools.partial(is_close, b=0, **self.np_close_kwargs))
-                        print(pd.concat([df1_with_diff[diff_mask],
-                                         df2_with_diff[diff_mask]
-                                         ], axis=1).head(self.num_diffs))
+                        float_format = pd.options.display.float_format
+                        pd.options.display.float_format = "{:.2f}"
+                        print(f'correlation of numerical cols:')
+                        print(df1[numerical_diff_cols].corrwith(df2[numerical_diff_cols]).to_string())
+                        print()
+                        pd.options.display.float_format = float_format  # restore format
 
-                    if non_numerical_diff_cols:
-                        print('non numerical diffs:')
-                        df1_with_diff = df1[non_numerical_diff_cols]
-                        df2_with_diff = df2[non_numerical_diff_cols]
-                        diff_mask = df1_with_diff != df2_with_diff
-                        print(pd.concat([df1_with_diff[diff_mask],
-                                         df2_with_diff[diff_mask]
-                                         ], axis=1).head(self.num_diffs))
+                    if self.num_diffs_to_display:
+                        if self.num_diffs_to_display > 0:
+                            print(f'Showing first {self.num_diffs_to_display} rows in cols with diff:')
+                            func_name = 'head'
+                        else:
+                            print(f'Showing last {abs(self.num_diffs_to_display)} rows in cols with diff:')
+                            func_name = 'tail'
+
+                        if numerical_diff_cols:
+
+                            df1_with_diff = df1[numerical_diff_cols]
+                            df2_with_diff = df2[numerical_diff_cols]
+
+                            diff_mask = ~(df1_with_diff - df2_with_diff).apply(
+                                functools.partial(is_close, b=0, **self.np_close_kwargs))
+
+                            diff_mask = diff_mask.any(axis=1)
+                            print(f'{diff_mask.shape[0]} numerical diffs:')
+
+                            masked_df1 = getattr(df1_with_diff.reset_index()[diff_mask], func_name)(abs(self.num_diffs_to_display))
+                            masked_df2 = getattr(df2_with_diff[diff_mask], func_name)(abs(self.num_diffs_to_display))
+
+                            diff_df = pd.DataFrame(masked_df1['index'])
+                            for col_name in masked_df2:
+                                diff_df = pd.concat([diff_df, masked_df1[col_name], masked_df2[col_name]], axis=1)
+
+                            print(diff_df)
+
+                        if non_numerical_diff_cols:
+                            df1_with_diff = df1[non_numerical_diff_cols]
+                            df2_with_diff = df2[non_numerical_diff_cols]
+                            diff_mask = (df1_with_diff != df2_with_diff).any(axis=1)
+                            masked_df1 = getattr(df1_with_diff.reset_index()[diff_mask], func_name)(abs(self.num_diffs_to_display))
+                            masked_df2 = getattr(df2_with_diff[diff_mask], func_name)(abs(self.num_diffs_to_display))
+
+                            print(f'{diff_mask.shape[0]} non numerical diffs:')
+
+                            diff_df = pd.DataFrame(masked_df1['index'])
+                            for col_name in masked_df2:
+                                diff_df = pd.concat([diff_df, masked_df1[col_name], masked_df2[col_name]], axis=1)
+
+                            print(diff_df)
+
                 return False
 
         return True
