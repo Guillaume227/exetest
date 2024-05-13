@@ -107,7 +107,7 @@ class DFComparator:
 
                     if numerical_diff_cols:
                         float_format = pd.options.display.float_format
-                        pd.options.display.float_format = "{:.2f}"
+                        pd.options.display.float_format = "{:.2f}".format
                         print(f'correlation of numerical cols:')
                         print(df1[numerical_diff_cols].corrwith(df2[numerical_diff_cols]).to_string())
                         print()
