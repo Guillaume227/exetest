@@ -94,8 +94,6 @@ class DFComparator:
 
             if cols_with_diffs:
                 if self.verbose:
-                    print('====================================')
-                    print(f'Showing first {self.num_diffs_to_display} in cols with diff {cols_with_diffs}:')
                     numerical_diff_cols = []
                     non_numerical_diff_cols = []
                     for col in cols_with_diffs:
@@ -106,45 +104,44 @@ class DFComparator:
                             non_numerical_diff_cols.append(col)
 
                     if numerical_diff_cols:
-                        float_format = pd.options.display.float_format
-                        pd.options.display.float_format = "{:.2f}".format
-                        print(f'correlation of numerical cols:')
-                        print(df1[numerical_diff_cols].corrwith(df2[numerical_diff_cols]).to_string())
-                        print()
-                        pd.options.display.float_format = float_format  # restore format
+                        with pd.option_context("display.float_format", "{:.2f}".format):
+                            print(f'correlation of numerical cols:')
+                            print(df1[numerical_diff_cols].corrwith(df2[numerical_diff_cols]).to_string())
+                            print()
 
                     if self.num_diffs_to_display:
                         if self.num_diffs_to_display > 0:
-                            print(f'Showing first {self.num_diffs_to_display} rows in cols with diff:')
+                            print(f'first {self.num_diffs_to_display} differing rows:')
                             func_name = 'head'
                         else:
-                            print(f'Showing last {abs(self.num_diffs_to_display)} rows in cols with diff:')
+                            print(f'last {abs(self.num_diffs_to_display)} differing rows:')
                             func_name = 'tail'
 
                         if numerical_diff_cols:
 
                             df1_with_diff = df1[numerical_diff_cols]
                             df2_with_diff = df2[numerical_diff_cols]
-
                             diff_mask = ~(df1_with_diff - df2_with_diff).apply(
                                 functools.partial(is_close, b=0, **self.np_close_kwargs))
-
                             diff_mask = diff_mask.any(axis=1)
-                            print(f'{diff_mask.shape[0]} numerical diffs:')
 
                             masked_df1 = getattr(df1_with_diff.reset_index()[diff_mask], func_name)(abs(self.num_diffs_to_display))
                             masked_df2 = getattr(df2_with_diff[diff_mask], func_name)(abs(self.num_diffs_to_display))
+
+                            print(f'{diff_mask.shape[0]} numerical diffs:')
 
                             diff_df = pd.DataFrame(masked_df1['index'])
                             for col_name in masked_df2:
                                 diff_df = pd.concat([diff_df, masked_df1[col_name], masked_df2[col_name]], axis=1)
 
-                            print(diff_df)
+                            with pd.option_context("display.max_rows", abs(self.num_diffs_to_display)):
+                                print(diff_df)
 
                         if non_numerical_diff_cols:
                             df1_with_diff = df1[non_numerical_diff_cols]
                             df2_with_diff = df2[non_numerical_diff_cols]
                             diff_mask = (df1_with_diff != df2_with_diff).any(axis=1)
+
                             masked_df1 = getattr(df1_with_diff.reset_index()[diff_mask], func_name)(abs(self.num_diffs_to_display))
                             masked_df2 = getattr(df2_with_diff[diff_mask], func_name)(abs(self.num_diffs_to_display))
 
@@ -154,7 +151,8 @@ class DFComparator:
                             for col_name in masked_df2:
                                 diff_df = pd.concat([diff_df, masked_df1[col_name], masked_df2[col_name]], axis=1)
 
-                            print(diff_df)
+                            with pd.option_context("display.max_rows", abs(self.num_diffs_to_display)):
+                                print(diff_df)
 
                 return False
 
