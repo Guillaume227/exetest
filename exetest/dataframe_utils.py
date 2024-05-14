@@ -105,7 +105,7 @@ class DFComparator:
 
                     if numerical_diff_cols:
                         with pd.option_context("display.float_format", "{:.2f}".format):
-                            print(f'correlation of numerical cols:')
+                            print(f'correlation of numerical cols ({df1.shape[0]} rows):')
                             print(df1[numerical_diff_cols].corrwith(df2[numerical_diff_cols]).to_string())
                             print()
 
@@ -153,7 +153,7 @@ def print_df_diff(df1, df2, diff_mask, func_name, num_diffs_to_display, message)
     masked_df1 = getattr(df1.reset_index()[diff_mask], func_name)(abs(num_diffs_to_display))
     masked_df2 = getattr(df2[diff_mask], func_name)(abs(num_diffs_to_display))
 
-    print(f'{diff_mask.shape[0]} {message} diffs:')
+    print(f'{diff_mask.sum()}/{diff_mask.shape[0]} {message} diffs:')
 
     diff_df = pd.DataFrame(masked_df1['index'])
     for col_name in masked_df2:
