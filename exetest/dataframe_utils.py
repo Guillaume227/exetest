@@ -125,35 +125,39 @@ class DFComparator:
                                 functools.partial(is_close, b=0, **self.np_close_kwargs))
                             diff_mask = diff_mask.any(axis=1)
 
-                            masked_df1 = getattr(df1_with_diff.reset_index()[diff_mask], func_name)(abs(self.num_diffs_to_display))
-                            masked_df2 = getattr(df2_with_diff[diff_mask], func_name)(abs(self.num_diffs_to_display))
-
-                            print(f'{diff_mask.shape[0]} numerical diffs:')
-
-                            diff_df = pd.DataFrame(masked_df1['index'])
-                            for col_name in masked_df2:
-                                diff_df = pd.concat([diff_df, masked_df1[col_name], masked_df2[col_name]], axis=1)
-
-                            with pd.option_context("display.max_rows", abs(self.num_diffs_to_display)):
-                                print(diff_df)
-
+                            print_df_diff(df1_with_diff,
+                                          df2_with_diff,
+                                          diff_mask,
+                                          func_name=func_name,
+                                          num_diffs_to_display=self.num_diffs_to_display,
+                                          message='numerical')
+                            
                         if non_numerical_diff_cols:
                             df1_with_diff = df1[non_numerical_diff_cols]
                             df2_with_diff = df2[non_numerical_diff_cols]
                             diff_mask = (df1_with_diff != df2_with_diff).any(axis=1)
 
-                            masked_df1 = getattr(df1_with_diff.reset_index()[diff_mask], func_name)(abs(self.num_diffs_to_display))
-                            masked_df2 = getattr(df2_with_diff[diff_mask], func_name)(abs(self.num_diffs_to_display))
-
-                            print(f'{diff_mask.shape[0]} non numerical diffs:')
-
-                            diff_df = pd.DataFrame(masked_df1['index'])
-                            for col_name in masked_df2:
-                                diff_df = pd.concat([diff_df, masked_df1[col_name], masked_df2[col_name]], axis=1)
-
-                            with pd.option_context("display.max_rows", abs(self.num_diffs_to_display)):
-                                print(diff_df)
+                            print_df_diff(df1_with_diff,
+                                          df2_with_diff,
+                                          diff_mask,
+                                          func_name=func_name,
+                                          num_diffs_to_display=self.num_diffs_to_display,
+                                          message='non-numerical')
 
                 return False
 
         return True
+
+
+def print_df_diff(df1, df2, diff_mask, func_name, num_diffs_to_display, message):
+    masked_df1 = getattr(df1.reset_index()[diff_mask], func_name)(abs(num_diffs_to_display))
+    masked_df2 = getattr(df2[diff_mask], func_name)(abs(num_diffs_to_display))
+
+    print(f'{diff_mask.shape[0]} {message} diffs:')
+
+    diff_df = pd.DataFrame(masked_df1['index'])
+    for col_name in masked_df2:
+        diff_df = pd.concat([diff_df, masked_df1[col_name], masked_df2[col_name]], axis=1)
+
+    with pd.option_context("display.max_rows", abs(num_diffs_to_display)):
+        print(diff_df)
