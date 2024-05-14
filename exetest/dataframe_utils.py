@@ -131,7 +131,7 @@ class DFComparator:
                                           func_name=func_name,
                                           num_diffs_to_display=self.num_diffs_to_display,
                                           message='numerical')
-                            
+
                         if non_numerical_diff_cols:
                             df1_with_diff = df1[non_numerical_diff_cols]
                             df2_with_diff = df2[non_numerical_diff_cols]
@@ -160,4 +160,4 @@ def print_df_diff(df1, df2, diff_mask, func_name, num_diffs_to_display, message)
         diff_df = pd.concat([diff_df, masked_df1[col_name], masked_df2[col_name]], axis=1)
 
     with pd.option_context("display.max_rows", abs(num_diffs_to_display)):
-        print(diff_df)
+        print(diff_df.reset_index(drop=True))
