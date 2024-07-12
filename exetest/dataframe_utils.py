@@ -66,20 +66,46 @@ class DFComparator:
             if cols.any():
                 columns_differ = True
                 if self.verbose:
-                    print('cols only in df1:', cols)
+                    print(len(cols), 'cols only in df1:', cols)
 
             cols = df2.columns.difference(df1.columns).values
             if cols.any():
                 columns_differ = True
                 if self.verbose:
-                    print('cols only in df2:', cols)
+                    print(len(cols), 'cols only in df2:', cols)
+                    print()
 
             if shape_differs or columns_differ:
-                return False
+                common_cols = df1.columns.intersection(df2.columns).values
+                if self.verbose:
+                    print(len(common_cols), 'common cols:', common_cols)
+                    print()
 
-            # exclude NaNs from comparison by replacing them with 0
-            df1 = df1.fillna(0)
-            df2 = df2.fillna(0)
+                if common_cols.any():
+                    df1 = df1.loc[:, common_cols]
+                    df2 = df2.loc[:, common_cols]
+                else:
+                    return False
+
+            for df in df1, df2:
+                df.replace([np.inf, -np.inf], np.nan, inplace=True)
+
+            if self.verbose:
+                df1_nans = df1.isna()
+                df2_nans = df2.isna()
+                differing_nan_mask = df1_nans ^ df2_nans
+
+                nan_col_mask = differing_nan_mask.any(axis=0)
+
+                if cols_with_nans := nan_col_mask[nan_col_mask].index.to_list():
+                    nan_row_mask = differing_nan_mask.any(axis=1)
+                    print(len(cols_with_nans), 'cols with nan differences:', cols_with_nans)
+
+                    print_df_diff(df1[cols_with_nans],
+                                  df2[cols_with_nans],
+                                  diff_mask=nan_row_mask,
+                                  num_diffs_to_display=self.num_diffs_to_display,
+                                  message='nans')
 
             cols_with_diffs = []
             for col in df1.columns:
@@ -106,17 +132,13 @@ class DFComparator:
                     if numerical_diff_cols:
                         with pd.option_context("display.float_format", "{:.2f}".format):
                             print(f'correlation of numerical cols ({df1.shape[0]} rows):')
-                            print(df1[numerical_diff_cols].corrwith(df2[numerical_diff_cols]).to_string())
+                            corrs = df1[numerical_diff_cols].corrwith(df2[numerical_diff_cols])
+                            print(corrs.sort_values(ascending=False).to_string())
+                            if corrs.shape[0] > 16:
+                                print(f'(on {df1.shape[0]} rows)')
                             print()
 
                     if self.num_diffs_to_display:
-                        if self.num_diffs_to_display > 0:
-                            print(f'first {self.num_diffs_to_display} differing rows:')
-                            func_name = 'head'
-                        else:
-                            print(f'last {abs(self.num_diffs_to_display)} differing rows:')
-                            func_name = 'tail'
-
                         if numerical_diff_cols:
 
                             df1_with_diff = df1[numerical_diff_cols]
@@ -127,8 +149,7 @@ class DFComparator:
 
                             print_df_diff(df1_with_diff,
                                           df2_with_diff,
-                                          diff_mask,
-                                          func_name=func_name,
+                                          diff_mask=diff_mask,
                                           num_diffs_to_display=self.num_diffs_to_display,
                                           message='numerical')
 
@@ -139,8 +160,7 @@ class DFComparator:
 
                             print_df_diff(df1_with_diff,
                                           df2_with_diff,
-                                          diff_mask,
-                                          func_name=func_name,
+                                          diff_mask=diff_mask,
                                           num_diffs_to_display=self.num_diffs_to_display,
                                           message='non-numerical')
 
@@ -149,11 +169,18 @@ class DFComparator:
         return True
 
 
-def print_df_diff(df1, df2, diff_mask, func_name, num_diffs_to_display, message):
+def print_df_diff(df1, df2, diff_mask, num_diffs_to_display, message):
+    if num_diffs_to_display > 0:
+        msg = f'first {num_diffs_to_display} differing rows'
+        func_name = 'head'
+    else:
+        msg = f'last {abs(num_diffs_to_display)} differing rows'
+        func_name = 'tail'
+
     masked_df1 = getattr(df1.reset_index()[diff_mask], func_name)(abs(num_diffs_to_display))
     masked_df2 = getattr(df2[diff_mask], func_name)(abs(num_diffs_to_display))
 
-    print(f'{diff_mask.sum()}/{diff_mask.shape[0]} {message} diffs:')
+    print(f'{msg} {diff_mask.sum()}/{diff_mask.shape[0]} {message} diffs:')
 
     diff_df = pd.DataFrame(masked_df1['index'])
     for col_name in masked_df2:
