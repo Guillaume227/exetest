@@ -356,7 +356,9 @@ class ExeTestCaseDecorator:
                 print(f'{new_file} does not exist')
                 if force_rebase or misc_utils.prompt_user("Remove it from reference output?",
                                                           default=rebase_prompt_default):
-                    if os.path.isdir(ref_file):
+                    if os.path.islink(ref_file):
+                        os.unlink(ref_file)
+                    elif os.path.isdir(ref_file):
                         shutil.rmtree(ref_file)
                     else:
                         os.remove(ref_file)
@@ -438,7 +440,7 @@ class ExeTestCaseDecorator:
 
         all_equal = True
         for compare_functor in compare_functors:
-            comparison_description = compare_functor.description()
+            comparison_description = getattr(compare_functor, 'description', None)
             if comparison_description:
                 comparison_description = f' ({comparison_description})'
             try:
@@ -515,8 +517,13 @@ class ExeTestCaseDecorator:
                 ref_path = os.path.normpath(ref_path)
                 new_path = os.path.normpath(new_path)
 
-                for dirpath, dirnames, filenames in os.walk(ref_path, followlinks=True):
+                for dirpath, dirnames, filenames in os.walk(ref_path, followlinks=False):
                     tmp_path = dirpath.replace(ref_path, new_path, 1)
+
+                    for dirname in dirnames:
+                        if os.path.islink(os.path.join(dirpath, dirname)):
+                            filenames.append(dirname)
+
                     for filename in filenames:
                         ref_filepath = os.path.join(dirpath, filename)
                         new_filepath = os.path.join(tmp_path, filename)
