@@ -53,120 +53,135 @@ class DFComparator:
         df2 = load_df(file_path=df_path2, ignore_cols=self.ignore_cols, filter_cols=self.filter_cols)
         return self.compare_dataframes(df1, df2)
 
-    def compare_dataframes(self, df1, df2):
-        if not df1.equals(df2):
+    def compare_dataframes(self, df1, df2) -> bool:
+        if df1.equals(df2):
+            return True
 
-            shape_differs = df1.shape != df2.shape
-            if shape_differs and self.verbose:
-                print('df1 shape:', df1.shape)
-                print('df2 shape:', df2.shape)
+        shape_differs = df1.shape != df2.shape
+        if shape_differs and self.verbose:
+            print('df1 shape:', df1.shape)
+            print('df2 shape:', df2.shape)
 
-            columns_differ = False
-            cols = df1.columns.difference(df2.columns).values
-            if cols.any():
-                columns_differ = True
-                if self.verbose:
-                    print(len(cols), 'cols only in df1:', cols)
-
-            cols = df2.columns.difference(df1.columns).values
-            if cols.any():
-                columns_differ = True
-                if self.verbose:
-                    print(len(cols), 'cols only in df2:', cols)
-                    print()
-
-            if shape_differs or columns_differ:
-                common_cols = df1.columns.intersection(df2.columns).values
-                if self.verbose:
-                    print(len(common_cols), 'common cols:', common_cols)
-                    print()
-
-                if common_cols.any():
-                    df1 = df1.loc[:, common_cols]
-                    df2 = df2.loc[:, common_cols]
-                else:
-                    return False
-
-            for df in df1, df2:
-                df.replace([np.inf, -np.inf], np.nan, inplace=True)
-
+        columns_differ = False
+        df1_only_cols = df1.columns.difference(df2.columns).values
+        if df1_only_cols.any():
+            columns_differ = True
             if self.verbose:
-                df1_nans = df1.isna()
-                df2_nans = df2.isna()
-                differing_nan_mask = df1_nans ^ df2_nans
+                print(len(df1_only_cols), 'cols only in df1:', df1_only_cols)
 
-                nan_col_mask = differing_nan_mask.any(axis=0)
+        df2_only_cols = df2.columns.difference(df1.columns).values
+        if df2_only_cols.any():
+            columns_differ = True
+            if self.verbose:
+                print(len(df2_only_cols), 'cols only in df2:', df2_only_cols)
+                print()
 
-                if cols_with_nans := nan_col_mask[nan_col_mask].index.to_list():
-                    nan_row_mask = differing_nan_mask.any(axis=1)
-                    print(len(cols_with_nans), 'cols with nan differences:', cols_with_nans)
+        if shape_differs or columns_differ:
+            common_cols = df1.columns.intersection(df2.columns).values
+            if self.verbose:
+                print(len(common_cols), 'common cols:', common_cols)
+                print()
 
-                    print_df_diff(df1[cols_with_nans],
-                                  df2[cols_with_nans],
-                                  diff_mask=nan_row_mask,
-                                  num_diffs_to_display=self.num_diffs_to_display,
-                                  message='nans')
+            if common_cols.any():
+                df1 = df1.loc[:, common_cols]
+                df2 = df2.loc[:, common_cols]
+            else:
+                return False
 
-            cols_with_diffs = []
-            for col in df1.columns:
-                if df1[col].dtype != 'category' and np.issubdtype(df1[col].dtype, np.number) \
-                                                and np.issubdtype(df2[col].dtype, np.number):
-                    # use numerical comparison
-                    if not np.allclose(df1[col].values, df2[col].values, **self.np_close_kwargs):
-                        cols_with_diffs.append(col)
-                else:
-                    if not np.equal(df1[col].values, df2[col].values).all():
-                        cols_with_diffs.append(col)
+        for df in df1, df2:
+            df.replace([np.inf, -np.inf], np.nan, inplace=True)
 
-            if cols_with_diffs:
-                if self.verbose:
-                    numerical_diff_cols = []
-                    non_numerical_diff_cols = []
-                    for col in cols_with_diffs:
-                        if np.issubdtype(df1[col].dtype, np.number) and \
-                           np.issubdtype(df2[col].dtype, np.number):
-                            numerical_diff_cols.append(col)
-                        else:
-                            non_numerical_diff_cols.append(col)
+        if self.verbose:
+            df1_nans = df1.isna()
+            df2_nans = df2.isna()
+            differing_nan_mask = df1_nans ^ df2_nans
 
+            nan_col_mask = differing_nan_mask.any(axis=0)
+
+            if cols_with_nans := nan_col_mask[nan_col_mask].index.to_list():
+                nan_row_mask = differing_nan_mask.any(axis=1)
+                print(len(cols_with_nans), 'cols with nan differences:', cols_with_nans)
+
+                print_df_diff(df1[cols_with_nans],
+                              df2[cols_with_nans],
+                              diff_mask=nan_row_mask,
+                              num_diffs_to_display=self.num_diffs_to_display,
+                              message='nans')
+
+        cols_with_diffs = []
+        for col in df1.columns:
+            if df1[col].dtype != 'category' and np.issubdtype(df1[col].dtype, np.number) and not np.issubdtype(df1[col].dtype, np.integer)\
+                                            and np.issubdtype(df2[col].dtype, np.number) and not np.issubdtype(df2[col].dtype, np.integer):
+                # use numerical comparison
+                if not np.allclose(df1[col].values, df2[col].values, **self.np_close_kwargs):
+                    cols_with_diffs.append(col)
+            else:
+                if not np.equal(df1[col].values, df2[col].values).all():
+                    cols_with_diffs.append(col)
+
+        if cols_with_diffs:
+            if self.verbose:
+                numerical_diff_cols = []
+                non_numerical_diff_cols = []
+                for col in cols_with_diffs:
+                    if np.issubdtype(df1[col].dtype, np.number) and \
+                       np.issubdtype(df2[col].dtype, np.number):
+                        numerical_diff_cols.append(col)
+                    else:
+                        non_numerical_diff_cols.append(col)
+
+                if numerical_diff_cols:
+                    with pd.option_context("display.float_format", "{:.2f}".format):
+                        print()
+                        print(f'correlation of numerical cols ({df1.shape[0]} rows):')
+
+                        for col in numerical_diff_cols:
+                            is_unique_1 = df1[col].nunique() == 1
+                            is_unique_2 = df2[col].nunique() == 1
+                            if is_unique_1 or is_unique_2:
+                                filename = 'file 1' if is_unique_1 else 'file 2'
+                                print(f"{col} has single value in {filename} - cannot compute corr")
+                                numerical_diff_cols.remove(col)
+
+                        num_diff_df1 = df1[numerical_diff_cols]
+                        num_diff_df2 = df2[numerical_diff_cols]
+
+                        corrs_df = num_diff_df1.corrwith(num_diff_df2)
+                        print(corrs_df[~corrs_df.isna()].sort_values(ascending=False).to_string())
+                        if corrs_df.shape[0] > 16:
+                            print(f'(on {df1.shape[0]} rows)')
+                        print()
+
+                if self.num_diffs_to_display:
                     if numerical_diff_cols:
-                        with pd.option_context("display.float_format", "{:.2f}".format):
-                            print(f'correlation of numerical cols ({df1.shape[0]} rows):')
-                            corrs = df1[numerical_diff_cols].corrwith(df2[numerical_diff_cols])
-                            print(corrs.sort_values(ascending=False).to_string())
-                            if corrs.shape[0] > 16:
-                                print(f'(on {df1.shape[0]} rows)')
-                            print()
 
-                    if self.num_diffs_to_display:
-                        if numerical_diff_cols:
+                        df1_with_diff = df1[numerical_diff_cols]
+                        df2_with_diff = df2[numerical_diff_cols]
+                        diff_mask = ~(df1_with_diff - df2_with_diff).apply(
+                            functools.partial(is_close, b=0, **self.np_close_kwargs))
+                        diff_mask = diff_mask.any(axis=1)
 
-                            df1_with_diff = df1[numerical_diff_cols]
-                            df2_with_diff = df2[numerical_diff_cols]
-                            diff_mask = ~(df1_with_diff - df2_with_diff).apply(
-                                functools.partial(is_close, b=0, **self.np_close_kwargs))
-                            diff_mask = diff_mask.any(axis=1)
-
+                        with pd.option_context("display.float_format", "{:.6f}".format):
                             print_df_diff(df1_with_diff,
                                           df2_with_diff,
                                           diff_mask=diff_mask,
                                           num_diffs_to_display=self.num_diffs_to_display,
                                           message='numerical')
 
-                        if non_numerical_diff_cols:
-                            df1_with_diff = df1[non_numerical_diff_cols]
-                            df2_with_diff = df2[non_numerical_diff_cols]
-                            diff_mask = (df1_with_diff != df2_with_diff).any(axis=1)
+                    if non_numerical_diff_cols:
+                        df1_with_diff = df1[non_numerical_diff_cols]
+                        df2_with_diff = df2[non_numerical_diff_cols]
+                        diff_mask = (df1_with_diff != df2_with_diff).any(axis=1)
 
-                            print_df_diff(df1_with_diff,
-                                          df2_with_diff,
-                                          diff_mask=diff_mask,
-                                          num_diffs_to_display=self.num_diffs_to_display,
-                                          message='non-numerical')
+                        print_df_diff(df1_with_diff,
+                                      df2_with_diff,
+                                      diff_mask=diff_mask,
+                                      num_diffs_to_display=self.num_diffs_to_display,
+                                      message='non-numerical')
 
-                return False
+            return False
 
-        return True
+        return True  # no (or acceptable) difference found
 
 
 def print_df_diff(df1, df2, diff_mask, num_diffs_to_display, message):
@@ -180,11 +195,19 @@ def print_df_diff(df1, df2, diff_mask, num_diffs_to_display, message):
     masked_df1 = getattr(df1.reset_index()[diff_mask], func_name)(abs(num_diffs_to_display))
     masked_df2 = getattr(df2[diff_mask], func_name)(abs(num_diffs_to_display))
 
+    print()
     print(f'{msg} {diff_mask.sum()}/{diff_mask.shape[0]} {message} diffs:')
 
     diff_df = pd.DataFrame(masked_df1['index'])
     for col_name in masked_df2:
-        diff_df = pd.concat([diff_df, masked_df1[col_name], masked_df2[col_name]], axis=1)
+        col1 = masked_df1[col_name]
+        col2 = masked_df2[col_name]
+        dfs = [diff_df, col1, col2]
+        if np.issubdtype(col2.dtype, np.number):
+            diff = col2 - col1
+            diff = diff.rename('diff').replace(0, '')
+            dfs.append(diff)
+        diff_df = pd.concat(dfs, axis=1)
 
     with pd.option_context("display.max_rows", abs(num_diffs_to_display)):
         print(diff_df.reset_index(drop=True))
