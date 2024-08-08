@@ -194,7 +194,7 @@ def print_df_diff(df1, df2, diff_mask, num_diffs_to_display, message):
         func_name = 'tail'
 
     num_diffs_to_display = min(df1.shape[0], abs(num_diffs_to_display))
-    msg += f'{num_diffs_to_display} differing rows'
+    msg += f' {num_diffs_to_display} differing rows'
 
     masked_df1 = getattr(df1.reset_index()[diff_mask], func_name)(num_diffs_to_display)
     masked_df2 = getattr(df2[diff_mask], func_name)(num_diffs_to_display)
