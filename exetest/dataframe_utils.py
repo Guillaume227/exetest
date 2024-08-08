@@ -185,18 +185,22 @@ class DFComparator:
 
 
 def print_df_diff(df1, df2, diff_mask, num_diffs_to_display, message):
+
     if num_diffs_to_display > 0:
-        msg = f'first {num_diffs_to_display} differing rows'
+        msg = f'first'
         func_name = 'head'
     else:
-        msg = f'last {abs(num_diffs_to_display)} differing rows'
+        msg = f'last'
         func_name = 'tail'
 
-    masked_df1 = getattr(df1.reset_index()[diff_mask], func_name)(abs(num_diffs_to_display))
-    masked_df2 = getattr(df2[diff_mask], func_name)(abs(num_diffs_to_display))
+    num_diffs_to_display = min(df1.shape[0], abs(num_diffs_to_display))
+    msg += f'{num_diffs_to_display} differing rows'
+
+    masked_df1 = getattr(df1.reset_index()[diff_mask], func_name)(num_diffs_to_display)
+    masked_df2 = getattr(df2[diff_mask], func_name)(num_diffs_to_display)
 
     print()
-    print(f'{msg} {diff_mask.sum()}/{diff_mask.shape[0]} {message} diffs:')
+    print(f'{msg} out of {diff_mask.shape[0]} {message} diffs:')
 
     diff_df = pd.DataFrame(masked_df1['index'])
     for col_name in masked_df2:
@@ -209,5 +213,5 @@ def print_df_diff(df1, df2, diff_mask, num_diffs_to_display, message):
             dfs.append(diff)
         diff_df = pd.concat(dfs, axis=1)
 
-    with pd.option_context("display.max_rows", abs(num_diffs_to_display)):
+    with pd.option_context("display.max_rows", num_diffs_to_display):
         print(diff_df.reset_index(drop=True))
