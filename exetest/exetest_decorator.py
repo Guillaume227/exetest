@@ -441,8 +441,11 @@ class ExeTestCaseDecorator:
         all_equal = True
         for compare_functor in compare_functors:
             comparison_description = getattr(compare_functor, 'description', None)
+            if callable(comparison_description):
+                comparison_description = comparison_description()
             if comparison_description:
                 comparison_description = f' ({comparison_description})'
+
             try:
                 compare_equal = compare_functor(ref_file, new_file)
             except Exception as exc:
