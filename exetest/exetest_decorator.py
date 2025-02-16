@@ -410,7 +410,7 @@ class ExeTestCaseDecorator:
             return self.comparators[filename]
 
         for pattern, comparator in self.comparators.items():
-            if pathlib.PurePath(filename).match(pattern):
+            if pathlib.PurePath(filepath).match(pattern):
                 return comparator
 
         if os.path.isdir(filepath):
@@ -440,7 +440,7 @@ class ExeTestCaseDecorator:
 
         all_equal = True
         for compare_functor in compare_functors:
-            comparison_description = getattr(compare_functor, 'description', None)
+            comparison_description = getattr(compare_functor, 'description', '')
             if callable(comparison_description):
                 comparison_description = comparison_description()
             if comparison_description:
