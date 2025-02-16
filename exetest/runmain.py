@@ -175,7 +175,12 @@ def process_args(args, other_pytest_args):
     if other_pytest_args:
         command += other_pytest_args
 
-    return run_command(command=command, env_vars=env_vars, verbose=verbose)
+    try:
+        return run_command(command=command, env_vars=env_vars, verbose=verbose)
+    except KeyboardInterrupt:
+        print()
+        print('---- Interrupted by user ----')
+        return 1
 
 
 def run_command(command, env_vars, verbose=True):
