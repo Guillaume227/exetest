@@ -76,11 +76,14 @@ class DFComparator:
     def compare_dataframes(self,
                            df1,
                            df2,
-                           extra_expressions: typing.Dict[str, str] = None):
+                           include_cols: typing.List[str] = None,
+                           exclude_cols: typing.List[str] = None):
         """
         :param extra_expressions:
         :return: mask of rows with differences (True if row is the same)
         """
+
+        exclude_cols = exclude_cols or []
 
         if self.filter_cols:
             df1 = df1.loc[:, self.filter_cols]
@@ -95,22 +98,27 @@ class DFComparator:
             print('df2 shape:', df2.shape)
 
         columns_differ = False
-        df1_only_cols = df1.columns.difference(df2.columns).values
+        df1_only_cols = set(df1.columns.difference(df2.columns).values)
+        if include_cols is not None:
+            df1_only_cols.intersection_update(include_cols)
+        df1_only_cols.difference_update(exclude_cols)
         if df1_only_cols.any():
             columns_differ = True
             if self.verbose:
                 print(len(df1_only_cols), 'cols only in df1:', df1_only_cols)
 
         df2_only_cols = df2.columns.difference(df1.columns).values
+        if include_cols is not None:
+            df2_only_cols.intersection_update(include_cols)
+        df2_only_cols.difference_update(exclude_cols)
         if df2_only_cols.any():
             columns_differ = True
             if self.verbose:
                 print(len(df2_only_cols), 'cols only in df2:', df2_only_cols)
                 print()
 
-        if extra_expressions:
-            for expr_name, expr in extra_expressions.items():
-                pass #df1 = df1[]
+        if include_cols is None:
+            include_cols = set(df1.columns.to_list()).union(df2.columns.to_list())
 
         num_row_difference = 0
         if shape_differs or columns_differ:
@@ -162,6 +170,9 @@ class DFComparator:
 
         cols_with_diffs = []
         for col in df1.columns:
+            if col not in include_cols or col in exclude_cols:
+                continue
+
             if df1[col].dtype != 'category' and np.issubdtype(df1[col].dtype, np.number) and not np.issubdtype(df1[col].dtype, np.integer)\
                                             and np.issubdtype(df2[col].dtype, np.number) and not np.issubdtype(df2[col].dtype, np.integer):
                 # use numerical comparison
@@ -279,17 +290,25 @@ def print_df_diff(df1, df2, diff_mask,
         col1 = masked_df1[col_name]
         col2 = masked_df2[col_name]
 
-        if atol and (abs(col1 - col2) < atol).all():
-            #skip too small diff
-            continue
+        is_numerical_col = all(np.issubdtype(col.dtype, np.number) for col in [col1, col2])
 
-        dfs = [diff_df, col1, col2]
-        if all(np.issubdtype(col.dtype, np.number) for col in [col1 and col2]):
-            diff = col2 - col1
-            diff_col = f'_diff_{len(diff_cols)}'
-            diff = diff.rename(diff_col)
-            dfs.append(diff)
-            diff_cols.append(diff_col)
+        dfs = [diff_df, col1]
+
+        if is_numerical_col:
+            if atol and (abs(col1 - col2) < atol).all():
+                #skip too small diff
+                pass
+            else:
+
+                diff = col2 - col1
+                diff_col = f'_diff_{len(diff_cols)}'
+                diff = diff.rename(diff_col)
+                dfs.append(col2)
+                dfs.append(diff)
+                diff_cols.append(diff_col)
+
+        elif (col1 != col2).all():
+            dfs.append(col2)
 
         diff_df = pd.concat(dfs, axis=1)
 
@@ -297,8 +316,8 @@ def print_df_diff(df1, df2, diff_mask,
         print_df = diff_df.copy()
         for col_name in diff_cols:
             print_df[col_name].replace(0, '', inplace=True)
-            print_df.rename(columns=dict.fromkeys(diff_cols, 'diff'), inplace=True)
-            print(getattr(print_df.reset_index(drop=False), func_name)(num_diffs_to_display))
+        print_df.rename(columns=dict.fromkeys(diff_cols, 'diff'), inplace=True)
+        print(getattr(print_df.reset_index(drop=False), func_name)(num_diffs_to_display))
 
     if diff_cols and print_largest:
         print()
@@ -306,6 +325,8 @@ def print_df_diff(df1, df2, diff_mask,
         sorted_df = diff_df.fillna(0).reset_index(drop=False)
         sorted_df = sorted_df.sort_values(by=diff_cols)
         for col_name in diff_cols:
-            sorted_df[col_name].replace(0, '', in_place=True)
+            sorted_df[col_name].replace(0, '', inplace=True)
 
         sorted_df.rename(columns=dict.fromkeys(diff_cols, 'diff'), inplace=True)
+
+        print(sorted_df.tail(num_diffs_to_display).reset_index(drop=True))
