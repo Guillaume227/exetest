@@ -77,9 +77,9 @@ class DFComparator:
                            df1,
                            df2,
                            include_cols: typing.List[str] = None,
-                           exclude_cols: typing.List[str] = None):
+                           exclude_cols: typing.List[str] = None,
+                           show_context_cols: bool = True):
         """
-        :param extra_expressions:
         :return: mask of rows with differences (True if row is the same)
         """
 
@@ -102,16 +102,16 @@ class DFComparator:
         if include_cols is not None:
             df1_only_cols.intersection_update(include_cols)
         df1_only_cols.difference_update(exclude_cols)
-        if df1_only_cols.any():
+        if df1_only_cols:
             columns_differ = True
             if self.verbose:
                 print(len(df1_only_cols), 'cols only in df1:', df1_only_cols)
 
-        df2_only_cols = df2.columns.difference(df1.columns).values
+        df2_only_cols = set(df2.columns.difference(df1.columns).values)
         if include_cols is not None:
             df2_only_cols.intersection_update(include_cols)
         df2_only_cols.difference_update(exclude_cols)
-        if df2_only_cols.any():
+        if df2_only_cols:
             columns_differ = True
             if self.verbose:
                 print(len(df2_only_cols), 'cols only in df2:', df2_only_cols)
@@ -159,8 +159,8 @@ class DFComparator:
                 nan_row_mask = differing_nan_mask.any(axis=1)
                 print(len(cols_with_nans), 'cols with nan differences:', ' '.join(cols_with_nans))
                 if self.num_diffs_to_display:
-                    print_df_diff(df1[cols_with_nans],
-                                  df2[cols_with_nans],
+                    print_df_diff(df1 if show_context_cols else df1[cols_with_nans],
+                                  df2 if show_context_cols else df2[cols_with_nans],
                                   diff_mask=nan_row_mask,
                                   num_diffs_to_display=self.num_diffs_to_display,
                                   message='nans',
@@ -234,8 +234,8 @@ class DFComparator:
                     diff_mask |= diff_mask_numerical
                     if self.verbose:
                         with pd.option_context("display.float_format", "{:g}".format):
-                            print_df_diff(df1_with_diff,
-                                          df2_with_diff,
+                            print_df_diff(df1 if show_context_cols else df1_with_diff,
+                                          df2 if show_context_cols else df2_with_diff,
                                           diff_mask=diff_mask_numerical,
                                           num_diffs_to_display=self.num_diffs_to_display,
                                           message='numerical')
@@ -247,8 +247,8 @@ class DFComparator:
                     diff_mask |= diff_mask_non_numerical
 
                     if self.verbose and self.num_diffs_to_display:
-                        print_df_diff(df1_with_diff,
-                                      df2_with_diff,
+                        print_df_diff(df1 if show_context_cols else df1_with_diff,
+                                      df2 if show_context_cols else df2_with_diff,
                                       diff_mask=diff_mask_non_numerical,
                                       num_diffs_to_display=self.num_diffs_to_display,
                                       message='non-numerical')
@@ -299,7 +299,6 @@ def print_df_diff(df1, df2, diff_mask,
                 #skip too small diff
                 pass
             else:
-
                 diff = col2 - col1
                 diff_col = f'_diff_{len(diff_cols)}'
                 diff = diff.rename(diff_col)
@@ -307,7 +306,7 @@ def print_df_diff(df1, df2, diff_mask,
                 dfs.append(diff)
                 diff_cols.append(diff_col)
 
-        elif (col1 != col2).all():
+        elif (col1 != col2).any():
             dfs.append(col2)
 
         diff_df = pd.concat(dfs, axis=1)
