@@ -60,6 +60,7 @@ class DFComparator:
         self.filter_cols = filter_cols or []
         self.verbose = verbose
         self.np_close_kwargs = np_close_kwargs
+        self.np_close_kwargs.setdefault('equal_nan', True)
         self.num_diffs_to_display = num_diffs
 
     def description(self) -> str:
@@ -153,11 +154,10 @@ class DFComparator:
         differing_nan_mask = df1_nans ^ df2_nans
 
         nan_col_mask = differing_nan_mask.any(axis=0)
-
-        diff_mask = nan_col_mask
+        nan_row_mask = differing_nan_mask.any(axis=1)
+        diff_mask = nan_row_mask
 
         if cols_with_nans_diffs := nan_col_mask[nan_col_mask].index.to_list():
-            nan_row_mask = differing_nan_mask.any(axis=1)
             print(len(cols_with_nans_diffs), 'cols with nan differences:', ' '.join(cols_with_nans_diffs))
             if self.verbose and self.num_diffs_to_display:
                 print_df_diff(df1 if show_context_cols else df1[cols_with_nans_diffs],
