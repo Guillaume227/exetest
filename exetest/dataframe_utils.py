@@ -78,7 +78,7 @@ class DFComparator:
                            df2,
                            include_cols: typing.List[str] = None,
                            exclude_cols: typing.List[str] = None,
-                           show_context_cols: bool = True):
+                           show_context_cols: bool = True) -> np.array:
         """
         :return: mask of rows with differences (True if row is the same)
         """
@@ -148,27 +148,33 @@ class DFComparator:
         for df in df1, df2:
             df.replace([np.inf, -np.inf], np.nan, inplace=True)
 
-        if self.verbose and True:
-            df1_nans = df1.isna()
-            df2_nans = df2.isna()
-            differing_nan_mask = df1_nans ^ df2_nans
+        df1_nans = df1.isna()
+        df2_nans = df2.isna()
+        differing_nan_mask = df1_nans ^ df2_nans
 
-            nan_col_mask = differing_nan_mask.any(axis=0)
+        nan_col_mask = differing_nan_mask.any(axis=0)
 
-            if cols_with_nans := nan_col_mask[nan_col_mask].index.to_list():
-                nan_row_mask = differing_nan_mask.any(axis=1)
-                print(len(cols_with_nans), 'cols with nan differences:', ' '.join(cols_with_nans))
-                if self.num_diffs_to_display:
-                    print_df_diff(df1 if show_context_cols else df1[cols_with_nans],
-                                  df2 if show_context_cols else df2[cols_with_nans],
-                                  diff_mask=nan_row_mask,
-                                  num_diffs_to_display=self.num_diffs_to_display,
-                                  message='nans',
-                                  print_largest=False)
-                else:
-                    print('no cols with Nans difference')
+        diff_mask = nan_col_mask
 
-        cols_with_diffs = []
+        if cols_with_nans_diffs := nan_col_mask[nan_col_mask].index.to_list():
+            nan_row_mask = differing_nan_mask.any(axis=1)
+            print(len(cols_with_nans_diffs), 'cols with nan differences:', ' '.join(cols_with_nans_diffs))
+            if self.verbose and self.num_diffs_to_display:
+                print_df_diff(df1 if show_context_cols else df1[cols_with_nans_diffs],
+                              df2 if show_context_cols else df2[cols_with_nans_diffs],
+                              diff_mask=nan_row_mask,
+                              num_diffs_to_display=self.num_diffs_to_display,
+                              message='nans',
+                              print_largest=False)
+        else:
+            print('no cols with Nans difference')
+
+        matching_nan_mask = (df1_nans & df2_nans).any(axis=1)
+        num_matching_nans = matching_nan_mask.sum()
+        if self.verbose and num_matching_nans:
+            print("there are", num_matching_nans, "matching nans")
+
+        cols_with_diffs = [] #cols_with_nans_diffs
         for col in df1.columns:
             if col not in include_cols or col in exclude_cols:
                 continue
@@ -182,7 +188,6 @@ class DFComparator:
                 if not np.equal(df1[col].values, df2[col].values).all():
                     cols_with_diffs.append(col)
 
-        diff_mask = np.array([False] * df1.shape[0])
         if cols_with_diffs:
             numerical_diff_cols = []
             non_numerical_diff_cols = []
@@ -225,7 +230,6 @@ class DFComparator:
                     print()
 
                 if numerical_diff_cols:
-
                     df1_with_diff = df1[numerical_diff_cols]
                     df2_with_diff = df2[numerical_diff_cols]
                     diff_mask_numerical = ~(df1_with_diff - df2_with_diff).apply(
@@ -256,6 +260,8 @@ class DFComparator:
         if num_row_difference:
             extra_false = np.full(num_row_difference, True, dtype=bool)
             diff_mask = np.concatenate((diff_mask, extra_false))
+        elif hasattr(diff_mask, 'to_numpy'):
+            diff_mask = diff_mask.to_numpy()
 
         return ~diff_mask
 
@@ -266,12 +272,15 @@ def print_df_diff(df1, df2, diff_mask,
                   atol: float = None,
                   print_largest: bool = True):
 
+
     if num_diffs_to_display > 0:
         msg = f'first'
         func_name = 'head'
-    else:
+    elif num_diffs_to_display < 0:
         msg = f'last'
         func_name = 'tail'
+    else:
+        return
 
     num_diffs = int(diff_mask.sum())
     num_diffs_to_display = min(df1.shape[0], abs(num_diffs_to_display), num_diffs)
@@ -279,9 +288,6 @@ def print_df_diff(df1, df2, diff_mask,
 
     masked_df1 = df1[diff_mask]
     masked_df2 = df2[diff_mask]
-
-    print()
-    print(f'{msg} out of {num_diffs} {message} diffs:')
 
     diff_cols = []
     diff_df = pd.DataFrame()
@@ -316,16 +322,21 @@ def print_df_diff(df1, df2, diff_mask,
         for col_name in diff_cols:
             print_df[col_name].replace(0, '', inplace=True)
         print_df.rename(columns=dict.fromkeys(diff_cols, 'diff'), inplace=True)
-        print(getattr(print_df.reset_index(drop=False), func_name)(num_diffs_to_display))
+        if not print_df.empty:
+            print()
+            print(f'{msg} out of {num_diffs} {message} diffs:')
+
+            print(getattr(print_df.reset_index(drop=False), func_name)(num_diffs_to_display))
 
     if diff_cols and print_largest:
-        print()
-        print("largest absolute diffs:")
         sorted_df = diff_df.fillna(0).reset_index(drop=False)
-        sorted_df = sorted_df.sort_values(by=diff_cols)
-        for col_name in diff_cols:
-            sorted_df[col_name].replace(0, '', inplace=True)
+        if not sorted_df.empty:
+            print()
+            print("largest absolute diffs:")
+            sorted_df = sorted_df.sort_values(by=diff_cols)
+            for col_name in diff_cols:
+                sorted_df[col_name].replace(0, '', inplace=True)
 
-        sorted_df.rename(columns=dict.fromkeys(diff_cols, 'diff'), inplace=True)
+            sorted_df.rename(columns=dict.fromkeys(diff_cols, 'diff'), inplace=True)
 
-        print(sorted_df.tail(num_diffs_to_display).reset_index(drop=True))
+            print(sorted_df.tail(num_diffs_to_display).reset_index(drop=True))
