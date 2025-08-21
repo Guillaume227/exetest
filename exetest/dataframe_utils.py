@@ -204,7 +204,7 @@ class DFComparator:
 
             if not common_cols:
                 # all rows differ, no common cols
-                return np.array([False] * df1.height)
+                return np.array([False] * max(df1_count, df2_count))
 
             df1 = df1.select(common_cols)
             df2 = df2.select(common_cols)
@@ -236,7 +236,6 @@ class DFComparator:
         df2 = df2.collect()
 
         rows_count = df1.height
-        diff_mask = np.zeros(rows_count, dtype = bool)
 
         differing_nan_cols = []
         nan_row_mask = np.zeros(rows_count, dtype=bool)
@@ -315,7 +314,7 @@ class DFComparator:
                         numerical_diff_cols.append(col)
 
                 elif is_numerical_col:
-                    if not np.array_equal(col2_vals[valid_mask], col2_vals[valid_mask]):
+                    if not np.array_equal(col1_vals[valid_mask], col2_vals[valid_mask]):
                         numerical_diff_cols.append(col)
 
                 else:
@@ -390,7 +389,7 @@ class DFComparator:
                         print_df_diff(
                             df1_with_diff,
                             df2_with_diff,
-                            diff_mask = diff_mask_numerical,
+                            diff_mask=diff_mask_numerical,
                             num_diffs_to_display=self.num_diffs_to_display,
                             message='numerical'
                         )
@@ -538,7 +537,7 @@ def print_df_diff(df1: Union[pl.DataFrame, pl.LazyFrame],
 
     for col in diff_df.columns:
         if col in diff_cols:
-            expr = (pl.when*(pl.col(col)==0)
+            expr = (pl.when(pl.col(col)==0)
                     .then(pl.lit(""))
                     .otherwise(pl.col(col)))
             rename_map[col] = 'diff'
@@ -551,7 +550,7 @@ def print_df_diff(df1: Union[pl.DataFrame, pl.LazyFrame],
     if num_diffs > 0:
         print()
         print(f'{msg} out of {num_diffs} {message} diffs:')
-        pandas_print(slice_func(print_df, num_diffs_to_display, col_rename=rename_map))
+        pandas_print(slice_func(print_df, num_diffs_to_display), col_rename=rename_map)
 
     if diff_cols and print_largest:
         print()
