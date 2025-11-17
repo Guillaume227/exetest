@@ -42,7 +42,7 @@ def uncentered_correlation(df1: pl.DataFrame, df2: pl.DataFrame):
     # Compute the uncentered correlation
     uncentered_corr = dot_product / (df1_norm * df2_norm)
 
-    return pl.Series('corr', uncentered_corr)
+    return pl.DataFrame(dict(Column=df1.columns, Uncentered=uncentered_corr))
 
 
 def pearson_correlation(df1: pl.DataFrame, df2: pl.DataFrame) -> pl.DataFrame:
@@ -264,7 +264,8 @@ class DFComparator:
                     print_largest=False
                 )
         else:
-            print('no cols with Nans difference')
+            if self.verbose:
+                print('no cols with Nans difference')
 
         matching_nan_mask = np.zeros(rows_count, dtype=bool)
         for col in common_cols:
@@ -473,7 +474,7 @@ def print_df_diff(df1: Union[pl.DataFrame, pl.LazyFrame],
                   diff_mask: np.ndarray,
                   num_diffs_to_display: int,
                   message: str,
-                  atol: float = None,
+                  atol: float = 0,
                   print_largest: bool = True):
     """
     Print differences between two polars DataFrames.
@@ -514,7 +515,7 @@ def print_df_diff(df1: Union[pl.DataFrame, pl.LazyFrame],
         if is_numerical_col:
             diff = col2 - col1
 
-            if atol is not None and (diff.abs() < atol).all():
+            if (diff.abs() < atol).all():
                 continue
 
             result_data[f"{col_name}"] = col1
